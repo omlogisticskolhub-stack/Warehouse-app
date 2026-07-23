@@ -4,82 +4,54 @@ import plotly.express as px
 from datetime import datetime
 
 # Page Configuration
-st.set_page_config(page_title="LOGISTICS AGING CASES DASHBOARD", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Warehouse Aging Report", layout="wide", initial_sidebar_state="collapsed")
 
-# Complete Premium Corporate UI Styling - Matching image_8.png
+# Styling - Fix Header Cut-off & Create Clean UI
 st.markdown("""
     <style>
-    /* 1. Page Background to Light Grey */
+    /* 1. Page Background */
     .stApp {
         background-color: #f7f9fb;
     }
     
-    /* 2. Custom Executive Header Bar (Navy Blue) */
+    /* 2. Header Bar Styling (Fixed Margin so it doesn't cut) */
     .custom-header {
         background-color: #0c1830;
         padding: 20px 30px;
         color: white;
-        margin: -95px -2rem 0px -2rem; /* Pull up to the very top */
+        margin: -4rem -2rem 20px -2rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid #1a2c4e;
+        border-bottom: 2px solid #1a2c4e;
     }
-    .header-left { flex-grow: 1; }
-    .header-title { font-size: 26px !important; font-weight: 700; color: white !important; margin-bottom: 5px; text-transform: uppercase; }
-    .header-subtitle { font-size: 16px; color: #a0b0d0; }
-    .header-right { text-align: right; font-size: 14px; color: white; line-height: 1.5; }
+    .header-title { font-size: 26px !important; font-weight: 700; color: white !important; margin-bottom: 4px; text-transform: uppercase; }
+    .header-subtitle { font-size: 14px; color: #a0b0d0; }
+    .header-right { text-align: right; font-size: 13px; color: #ffffff; line-height: 1.5; }
 
-    /* 3. Pure White, Flat KPI Cards with Top Shadow & Border */
+    /* 3. Executive KPI Cards */
     div[data-testid="stMetric"] {
         background: #ffffff;
-        padding: 25px !important;
-        border-radius: 6px;
+        padding: 20px !important;
+        border-radius: 8px;
         border: 1px solid #e1e4e8;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        margin-bottom: 15px;
         text-align: center;
     }
     div[data-testid="stMetricValue"] {
-        font-size: 38px !important;
-        color: #0d265a !important; /* Premium Navy Blue for numbers */
+        font-size: 34px !important;
+        color: #0d265a !important;
         font-weight: 700 !important;
     }
     div[data-testid="stMetricLabel"] {
-        font-size: 14px !important;
-        color: #6a737d !important;
+        font-size: 13px !important;
+        color: #57606a !important;
         text-transform: uppercase;
         font-weight: 600;
-        letter-spacing: 0.5px;
-    }
-    
-    /* Highlight special KPI with Red (matches image_8.png second card) */
-    div[data-testid="stMetric"]:nth-child(2) div[data-testid="stMetricValue"] {
-        color: #d11313 !important;
     }
 
-    /* 4. Subheader Styles */
-    h3 {
-        color: #0d265a !important;
-        font-weight: 600 !important;
-        font-size: 20px !important;
-        padding-top: 20px;
-        margin-bottom: 15px;
-    }
-    
-    /* 5. Cleanup Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #ffffff;
-        border-right: 1px solid #e1e4e8;
-    }
-    [data-testid="stSidebarNav"] { padding-top: 15px; }
-    
-    /* 6. Main Content Area Padding */
-    .block-container {
-        padding-top: 40px !important;
-    }
-    
-    /* 7. Hide Streamlit Overlays & GitHub/Fork Icons */
+    /* 4. Hide Top Streamlit Toolbar & GitHub Branding */
     header { visibility: hidden; }
     footer { visibility: hidden; }
     #MainMenu { visibility: hidden; }
@@ -89,29 +61,26 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Define Current Data Date for Header
-current_date_str = datetime.today().strftime("%B %Y") # e.g., "July 2026"
+# Executive Header
+current_date_str = datetime.today().strftime("%B %Y")
 
-# Create the Custom Executive Header Bar
 st.markdown(f"""
     <div class="custom-header">
-        <div class="header-left">
+        <div>
             <div class="header-title">Warehouse Aging Report</div>
             <div class="header-subtitle">Pending Stock & Oldest Unresolved Cases Summary</div>
         </div>
         <div class="header-right">
-            Report Date: {current_date_str}<br/>
-            Department: Warehouse & Logistics Ops
+            <b>Report Date:</b> {current_date_str}<br/>
+            <b>Department:</b> Warehouse & Logistics Ops
         </div>
     </div>
 """, unsafe_allow_html=True)
 
-# 8. Move File Uploader to Sidebar
-st.sidebar.subheader("Data Upload")
-uploaded_file = st.sidebar.file_uploader("Choose Warehouse Excel File (.xlsx, .xls)", type=["xlsx", "xls"])
+# 5. Simple File Uploader right at the top
+uploaded_file = st.file_uploader("📂 Select / Upload Warehouse Excel File (.xlsx, .xls)", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
-    # 9. Main Area for Dashboard Content (visible only after upload)
     with st.spinner("Processing warehouse data..."):
         df = pd.read_excel(uploaded_file)
         
@@ -143,27 +112,45 @@ if uploaded_file is not None:
         mid_cases = len(df[(df['CALCULATED_DAYS'] > 30) & (df['CALCULATED_DAYS'] <= 90)])
         fresh_cases = len(df[df['CALCULATED_DAYS'] <= 30])
 
-        # KPI Cards Display - Four Cards Matching image_8.png
+        st.markdown("---")
+
+        # KPI Cards Display
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Total Pending Stock", f"{total_cases:,}")
-        c2.metric("Critical Cases (>90 Days)", f"{critical_cases:,}")
-        c3.metric("Avg Aging Days", f"{avg_aging} Days")
-        
-        # New KPI based on image_8.png: Total Cases with some Aging (> 30 Days)
-        aging_total_cases = critical_cases + mid_cases
-        c4.metric("Aging over 30 Days", f"{aging_total_cases:,}")
+        c2.metric("Fresh Stock (0-30 Days)", f"{fresh_cases:,}")
+        c3.metric("🚨 Critical Stock (>90 Days)", f"{critical_cases:,}")
+        c4.metric("Avg Aging Days", f"{avg_aging} Days")
 
-        # Section: Clean Data Display
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Top Clients & Region Breakdown
+        col_left, col_right = st.columns(2)
+
+        client_col = 'CEE' if 'CEE' in df.columns else 'CONSIGNEE' if 'CONSIGNEE' in df.columns else None
+        region_col = 'FROMSOURCE' if 'FROMSOURCE' in df.columns else 'REGION' if 'REGION' in df.columns else None
+
+        with col_left:
+            st.subheader("🏢 Top 10 Clients by Pending Cases")
+            if client_col:
+                top_clients = df[client_col].value_counts().head(10).reset_index()
+                top_clients.columns = ['Client Name', 'Total Cases']
+                fig_client = px.bar(top_clients, x='Total Cases', y='Client Name', orientation='h', 
+                                    text='Total Cases', color='Total Cases', color_continuous_scale='Blues')
+                fig_client.update_layout(yaxis={'categoryorder':'total ascending'}, margin=dict(l=0, r=0, t=20, b=0), height=320)
+                st.plotly_chart(fig_client, use_container_width=True)
+
+        with col_right:
+            st.subheader("📍 Region / Source Aging Breakdown")
+            if region_col:
+                region_summary = df.groupby([region_col, 'Aging_Bucket']).size().unstack(fill_value=0)
+                st.dataframe(region_summary, use_container_width=True, height=320)
+
+        # Critical Cases Table
         st.subheader("⚠️ Top Critical Cases (> 30 Days Aging)")
         critical_df = df[df['CALCULATED_DAYS'] > 30].sort_values(by='CALCULATED_DAYS', ascending=False)
         
-        # Define columns for a clean view, matching the spirit of the data table in image_8.png
-        client_col = 'CEE' if 'CEE' in df.columns else 'CONSIGNEE' if 'CONSIGNEE' in df.columns else None
-        region_col = 'FROMSOURCE' if 'FROMSOURCE' in df.columns else 'REGION' if 'REGION' in df.columns else None
-        
         display_cols = [c for c in ['CN_CN_NO', client_col, region_col, 'CN_DATE', 'CALCULATED_DAYS', 'UNDLVRD_REASON', 'CN_REMARKS'] if c and c in df.columns]
         
-        # Display the data table with premium formatting
         st.dataframe(critical_df[display_cols].rename(columns={
             'CALCULATED_DAYS': 'Aging (Days)',
             'CN_CN_NO': 'CN Number',
@@ -174,12 +161,6 @@ if uploaded_file is not None:
             'CN_REMARKS': 'Remarks'
         }), use_container_width=True, hide_index=True)
 
-        # Download Export
-        st.markdown("<br>", unsafe_allow_html=True)
+        # Export Button
         csv = critical_df.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Export Critical Cases Data (CSV)", data=csv, file_name='Critical_Warehouse_Cases.csv', mime='text/csv')
-
-else:
-    # Instruction for user if no file is uploaded
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.info("Please upload your warehouse Excel file using the sidebar on the left.")
