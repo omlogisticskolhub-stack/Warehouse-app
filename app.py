@@ -3,66 +3,96 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-# Page Configuration
-st.set_page_config(page_title="Om Logistics Warehouse Report", layout="wide", initial_sidebar_state="collapsed")
+# Page Configuration - Light Clean Dashboard Theme
+st.set_page_config(page_title="Floor Ops Dashboard - HubEye Style", layout="wide", initial_sidebar_state="collapsed")
 
-# Om Logistics Corporate Branding Theme CSS
+# Delhivery / HubEye Style CSS
 st.markdown("""
     <style>
-    /* Base App Theme */
-    .stApp {
-        background-color: #0d1321;
-        color: #ffffff;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
     }
-    
-    /* Om Logistics Header Style */
-    .om-header {
-        background: linear-gradient(135deg, #b91c1c 0%, #1e293b 100%);
-        padding: 22px 30px;
-        color: white;
-        margin: -4rem -2rem 25px -2rem;
+
+    .stApp {
+        background-color: #f4f6f9;
+        color: #1e293b;
+    }
+
+    /* Top Navigation / Header Bar */
+    .hub-header {
+        background-color: #ffffff;
+        padding: 16px 28px;
+        margin: -4rem -2rem 20px -2rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 3px solid #ef4444;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        border-bottom: 2px solid #e2e8f0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    .om-title { 
-        font-size: 28px !important; 
-        font-weight: 800; 
-        color: #ffffff !important; 
-        text-transform: uppercase; 
-        letter-spacing: 1px;
+    .hub-title {
+        font-size: 24px !important;
+        font-weight: 800;
+        color: #d32f2f !important; /* HubEye Red */
+        letter-spacing: -0.5px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
-    .om-subtitle { font-size: 14px; color: #fca5a5; margin-top: 2px; font-weight: 500; }
-    .om-right { text-align: right; font-size: 13px; color: #ffffff; line-height: 1.6; }
+    .hub-subtitle {
+        font-size: 13px;
+        color: #64748b;
+        font-weight: 500;
+    }
+    .hub-meta {
+        text-align: right;
+        font-size: 12px;
+        color: #475569;
+        line-height: 1.5;
+    }
 
-    /* Custom Metric Cards with High Contrast */
+    /* Metric Cards - Clean White Card Style */
     div[data-testid="stMetric"] {
-        background: #1e293b !important;
-        padding: 20px !important;
-        border-radius: 10px !important;
-        border-top: 4px solid #ef4444 !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.4) !important;
-        text-align: center;
+        background: #ffffff !important;
+        padding: 18px !important;
+        border-radius: 8px !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
+        text-align: left;
     }
-    div[data-testid="stMetricValue"] { 
-        font-size: 34px !important; 
-        color: #ffffff !important; 
-        font-weight: 800 !important; 
+    div[data-testid="stMetricValue"] {
+        font-size: 30px !important;
+        color: #0f172a !important;
+        font-weight: 800 !important;
     }
-    div[data-testid="stMetricLabel"] { 
-        font-size: 13px !important; 
-        color: #cbd5e1 !important; 
-        text-transform: uppercase; 
-        font-weight: 700 !important; 
+    div[data-testid="stMetricLabel"] {
+        font-size: 12px !important;
+        color: #64748b !important;
+        text-transform: uppercase;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px;
     }
 
-    /* Tabs & Tables visibility fix */
-    .stTabs [data-baseweb="tab-list"] { background-color: #1e293b; border-radius: 8px; }
-    .stTabs [data-baseweb="tab"] { color: #ffffff !important; font-weight: 600; }
-    
-    /* Hide Streamlit Default Toolbars */
+    /* Section Subheaders */
+    .section-head {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 12px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid #cbd5e1;
+    }
+
+    /* Clean Uploader Box */
+    div[data-testid="stFileUploader"] {
+        background-color: #ffffff;
+        border: 2px dashed #cbd5e1;
+        border-radius: 8px;
+        padding: 10px;
+    }
+
+    /* Hide Unwanted UI Overlays */
     header { visibility: hidden; display: none !important; }
     footer { visibility: hidden; display: none !important; }
     #MainMenu { visibility: hidden; display: none !important; }
@@ -97,173 +127,203 @@ ALLOWED_TODIST = [
 # Track Upload Timestamp
 upload_time_str = st.session_state.get('upload_time', "Not Uploaded Yet")
 
-# Header Rendering
+# Top HubEye Style Navigation Header
 st.markdown(f"""
-    <div class="om-header">
+    <div class="hub-header">
         <div>
-            <div class="om-title">🚛 OM LOGISTICS LIMITED</div>
-            <div class="om-subtitle">Warehouse Aging & Stock Analytics Dashboard</div>
+            <div class="hub-title"><span>📦</span> FLOOR OPS | AGING & PENDENCY ANALYTICS</div>
+            <div class="hub-subtitle">Kolkata Regional Hubs Pendency Tracking</div>
         </div>
-        <div class="om-right">
-            <b>Region:</b> Kolkata / West Bengal Hubs<br/>
-            <b>File Upload Time:</b> <span style="color: #fca5a5;">{upload_time_str}</span>
+        <div class="hub-meta">
+            <b>Last Sync / Upload:</b> <span style="color: #d32f2f; font-weight: 700;">{upload_time_str}</span><br/>
+            <b>System Status:</b> <span style="color: #16a34a;">● Live Operations</span>
         </div>
     </div>
 """, unsafe_allow_html=True)
 
-# Styled Upload Area
-uploaded_file = st.file_uploader("📂 Select / Upload Warehouse Excel File (.xlsx, .xls)", type=["xlsx", "xls"])
+# Styled Upload Bar
+uploaded_file = st.file_uploader("📂 Choose / Upload Operations Data Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
-    # Set Live Time on Upload
-    st.session_state['upload_time'] = datetime.now().strftime("%d %B %Y, %I:%M:%S %p")
+    # Live Upload Timestamp
+    st.session_state['upload_time'] = datetime.now().strftime("%d-%b-%Y %I:%M %p")
     upload_time_str = st.session_state['upload_time']
 
-    with st.spinner("Cleaning Duplicate CNs & Filtering TODIST Locations..."):
-        raw_df = pd.read_excel(uploaded_file)
-        
-        # Clean column names spaces
-        raw_df.columns = raw_df.columns.str.strip()
+    with st.spinner("Processing & Auto-Mapping Columns..."):
+        df_raw = pd.read_excel(uploaded_file)
+        df_raw.columns = df_raw.columns.str.strip().str.upper()
 
-        # Helper to safely select column by Index
-        def get_col_by_idx(df, idx):
-            if idx < len(df.columns):
-                return df.columns[idx]
+        # Helper Function to Smartly Find Columns
+        def find_column(possible_names, df):
+            for name in possible_names:
+                for col in df.columns:
+                    if name in col:
+                        return col
             return None
 
-        # Column Mapping
-        col_a = get_col_by_idx(raw_df, 0)   # Col A (CN_CN_NO)
-        col_b = get_col_by_idx(raw_df, 1)   # Col B
-        col_c = get_col_by_idx(raw_df, 2)   # Col C (Mode / Priority)
-        col_d = get_col_by_idx(raw_df, 3)   # Col D
-        col_e = get_col_by_idx(raw_df, 4)   # Col E
-        col_f = get_col_by_idx(raw_df, 5)   # Col F
-        col_g = get_col_by_idx(raw_df, 6)   # Col G (TODIST Location)
-        col_i = get_col_by_idx(raw_df, 8)   # Col I (CN Date)
-        col_j = get_col_by_idx(raw_df, 9)   # Col J (CEE / Consignee)
-        col_l = get_col_by_idx(raw_df, 11)  # Col L (Pincode)
-        col_m = get_col_by_idx(raw_df, 12)  # Col M (CN_PKG / Boxes)
-        col_aq = get_col_by_idx(raw_df, 42) # Col AQ (Reason / Remarks)
+        # Smart Column Detection
+        col_cn = find_column(['CN_CN_NO', 'CN_NO', 'WAYBILL', 'LR_NO', 'CN'], df_raw)
+        col_pkg = find_column(['CN_PKG', 'PKG', 'BOX', 'QTY', 'PIECES'], df_raw)
+        col_todist = find_column(['TODIST', 'DESTINATION', 'LOCATION', 'HUB'], df_raw)
+        col_date = find_column(['CN_DATE', 'BOOKING_DATE', 'DATE'], df_raw)
+        col_days = find_column(['CN_TOTAL_DAYS', 'AGEING', 'DAYS', 'PENDING_DAYS'], df_raw)
+        col_reason = find_column(['UNDLVRD_REASON', 'REASON', 'REMARKS', 'DELAY_REASON'], df_raw)
+        col_mode = find_column(['MODE', 'SERVICE', 'PRIORITY', 'TRANSIT'], df_raw)
+        col_cee = find_column(['CEE', 'CONSIGNEE', 'CLIENT', 'RECEIVER'], df_raw)
+        col_pin = find_column(['PINCODE', 'PIN_CODE', 'PIN', 'DEST_PIN'], df_raw)
 
-        df = raw_df.copy()
+        df = df_raw.copy()
 
-        # 1. REMOVE DUPLICATE CN NUMBERS (Col A)
-        if col_a and col_a in df.columns:
-            df = df.drop_duplicates(subset=[col_a], keep='first')
+        # 1. Deduplicate by CN / Waybill
+        if col_cn:
+            df = df.drop_duplicates(subset=[col_cn], keep='first')
 
-        # 2. FILTER BY TODIST LOCATIONS (Col G)
-        if col_g and col_g in df.columns:
-            df[col_g] = df[col_g].astype(str).str.strip()
-            df = df[df[col_g].isin(ALLOWED_TODIST)]
+        # 2. Filter TODIST Locations
+        if col_todist:
+            df[col_todist] = df[col_todist].astype(str).str.strip()
+            df = df[df[col_todist].isin(ALLOWED_TODIST)]
 
-        # 3. ACCURATE AGING DAYS CALCULATION (Col I)
-        if col_i and col_i in df.columns:
-            df['CN_DATE_CLEAN'] = pd.to_datetime(df[col_i], errors='coerce')
+        # 3. Calculate Exact Aging Days & Hours
+        if col_date:
+            df['CN_DATE_CLEAN'] = pd.to_datetime(df[col_date], errors='coerce')
             today = pd.to_datetime(datetime.today().date())
             df['CALCULATED_DAYS'] = (today - df['CN_DATE_CLEAN']).dt.days.fillna(0)
             df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].apply(lambda x: max(0, int(x)))
+        elif col_days:
+            df['CALCULATED_DAYS'] = pd.to_numeric(df[col_days], errors='coerce').fillna(0).astype(int)
         else:
             df['CALCULATED_DAYS'] = 0
 
-        # 4. ACCURATE CN_PKG / TOTAL BOXES SUM (Col M)
-        total_boxes = 0
-        if col_m and col_m in df.columns:
-            total_boxes = pd.to_numeric(df[col_m], errors='coerce').fillna(0).sum()
+        df['CALCULATED_HOURS'] = df['CALCULATED_DAYS'] * 24
 
-        # Metrics Values
-        total_cases = len(df)
-        critical_cases = len(df[df['CALCULATED_DAYS'] > 90])
-        avg_aging = round(df['CALCULATED_DAYS'].mean(), 1) if len(df) > 0 else 0
+        # 4. Aging Hour Buckets Categorization
+        def assign_hour_bucket(hrs):
+            if hrs >= 96:
+                return "96 Hour Above"
+            elif hrs >= 72:
+                return "72 Hour Above"
+            elif hrs >= 48:
+                return "48 Hour Above"
+            elif hrs >= 24:
+                return "24 Hour Above"
+            else:
+                return "24 Hour Below"
 
-        st.markdown("---")
+        df['Aging_Bucket'] = df['CALCULATED_HOURS'].apply(assign_hour_bucket)
 
-        # KPI Metrics Summary Cards
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Pending Shipments (Unique CN)", f"{total_cases:,}")
-        c2.metric("Total CN_PKG (Total Boxes)", f"{int(total_boxes):,}")
-        c3.metric("🚨 Critical Aging (>90 Days)", f"{critical_cases:,}")
-        c4.metric("Avg Aging Days", f"{avg_aging} Days")
+        # 5. Precise CN_PKG / Box Calculation
+        total_pkg = 0
+        if col_pkg:
+            total_pkg = pd.to_numeric(df[col_pkg], errors='coerce').fillna(0).sum()
+
+        total_cn = len(df)
+        avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
+
+        # KPI Metrics Row
+        st.markdown("<br>", unsafe_allow_html=True)
+        c1, c2, c3, c4, c5 = st.columns(5)
+        
+        c1.metric("Total Pending CNs", f"{total_cn:,}")
+        c2.metric("Total CN_PKG (Quantity)", f"{int(total_pkg):,}")
+        c3.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
+        c4.metric("⚠️ 72-96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='72 Hour Above']):,}")
+        c5.metric("Avg Aging (Days)", f"{avg_days} Days")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Mode Breakdown & Delivery Reasons
-        row1_col1, row1_col2 = st.columns(2)
+        # Section 1: Hour Bucket Breakdown & Delivery Reason
+        r1_col1, r1_col2 = st.columns(2)
 
-        with row1_col1:
-            st.subheader("✈️ Transit Mode Breakdown (Col C)")
-            if col_c and col_c in df.columns:
-                mode_counts = df[col_c].value_counts().reset_index()
-                mode_counts.columns = ['Mode', 'Count']
-                fig_mode = px.pie(mode_counts, names='Mode', values='Count', hole=0.4,
-                                  color_discrete_sequence=px.colors.qualitative.Bold)
-                fig_mode.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=320, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                st.plotly_chart(fig_mode, use_container_width=True)
+        with r1_col1:
+            st.markdown("<div class='section-head'>⏱️ Pendency Breakdown by Hours</div>", unsafe_allow_html=True)
+            bucket_order = ["96 Hour Above", "72 Hour Above", "48 Hour Above", "24 Hour Above", "24 Hour Below"]
+            bucket_df = df['Aging_Bucket'].value_counts().reindex(bucket_order).fillna(0).reset_index()
+            bucket_df.columns = ['Hour Bucket', 'Shipment Count']
 
-        with row1_col2:
-            st.subheader("⚠️ Delivery Delay Reasons (Col AQ)")
-            if col_aq and col_aq in df.columns:
-                reason_counts = df[col_aq].fillna("No Reason Provided").value_counts().head(8).reset_index()
-                reason_counts.columns = ['Reason', 'Count']
-                fig_reason = px.bar(reason_counts, x='Count', y='Reason', orientation='h', text='Count',
-                                    color='Count', color_continuous_scale='Reds')
-                fig_reason.update_layout(yaxis={'categoryorder':'total ascending'}, margin=dict(l=0, r=0, t=30, b=0), height=320, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
+            fig_bucket = px.bar(
+                bucket_df, x='Hour Bucket', y='Shipment Count', text='Shipment Count',
+                color='Hour Bucket',
+                color_discrete_map={
+                    "96 Hour Above": "#b91c1c",
+                    "72 Hour Above": "#ef4444",
+                    "48 Hour Above": "#f97316",
+                    "24 Hour Above": "#eab308",
+                    "24 Hour Below": "#22c55e"
+                }
+            )
+            fig_bucket.update_layout(
+                showlegend=False, height=300, margin=dict(l=0, r=0, t=10, b=0),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#0f172a', family='Inter')
+            )
+            st.plotly_chart(fig_bucket, use_container_width=True)
+
+        with r1_col2:
+            st.markdown("<div class='section-head'>⚠️ Undelivered / Delay Reasons (UNDLVRD_REASON)</div>", unsafe_allow_html=True)
+            if col_reason:
+                reason_df = df[col_reason].fillna("No Reason Updated").value_counts().head(7).reset_index()
+                reason_df.columns = ['Reason', 'Count']
+
+                fig_reason = px.bar(
+                    reason_df, x='Count', y='Reason', orientation='h', text='Count',
+                    color='Count', color_continuous_scale='Reds'
+                )
+                fig_reason.update_layout(
+                    showlegend=False, height=300, margin=dict(l=0, r=0, t=10, b=0),
+                    yaxis={'categoryorder': 'total ascending'},
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='#0f172a', family='Inter')
+                )
                 st.plotly_chart(fig_reason, use_container_width=True)
+            else:
+                st.info("Reason column not detected in uploaded sheet.")
 
-        st.markdown("---")
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        # Clients & Pin Codes
-        row2_col1, row2_col2 = st.columns(2)
+        # Section 2: Consignee & Pincode Performance
+        r2_col1, r2_col2 = st.columns(2)
 
-        with row2_col1:
-            st.subheader("🏢 Consignee Analysis (CEE - Col J)")
-            if col_j and col_j in df.columns:
-                tab1, tab2 = st.tabs(["🔥 Top Pending Clients", "📉 Low Pending Clients"])
-                with tab1:
-                    top_clients = df[col_j].value_counts().head(10).reset_index()
-                    top_clients.columns = ['Client Name', 'Total Cases']
-                    st.dataframe(top_clients, use_container_width=True, hide_index=True)
-                with tab2:
-                    low_clients = df[col_j].value_counts().tail(10).reset_index()
-                    low_clients.columns = ['Client Name', 'Total Cases']
-                    st.dataframe(low_clients, use_container_width=True, hide_index=True)
+        with r2_col1:
+            st.markdown("<div class='section-head'>🏢 Consignee Analysis (CEE)</div>", unsafe_allow_html=True)
+            if col_cee:
+                t1, t2 = st.tabs(["🔥 Top Pending Clients", "📉 Low Pending Clients"])
+                with t1:
+                    st.dataframe(df[col_cee].value_counts().head(8).reset_index().rename(columns={'index':'Consignee', col_cee:'CN Count'}), use_container_width=True, hide_index=True)
+                with t2:
+                    st.dataframe(df[col_cee].value_counts().tail(8).reset_index().rename(columns={'index':'Consignee', col_cee:'CN Count'}), use_container_width=True, hide_index=True)
 
-        with row2_col2:
-            st.subheader("📍 Pin Code Summary (Col L)")
-            if col_l and col_l in df.columns:
-                tab_p1, tab_p2 = st.tabs(["📍 Top Critical Pin Codes", "📌 Low Pending Pin Codes"])
-                with tab_p1:
-                    top_pins = df[col_l].value_counts().head(10).reset_index()
-                    top_pins.columns = ['Pin Code', 'Total Cases']
-                    st.dataframe(top_pins, use_container_width=True, hide_index=True)
-                with tab_p2:
-                    low_pins = df[col_l].value_counts().tail(10).reset_index()
-                    low_pins.columns = ['Pin Code', 'Total Cases']
-                    st.dataframe(low_pins, use_container_width=True, hide_index=True)
+        with r2_col2:
+            st.markdown("<div class='section-head'>📍 Pincode Breakdown</div>", unsafe_allow_html=True)
+            if col_pin:
+                pt1, pt2 = st.tabs(["📍 Top Critical Pincodes", "📌 Low Pending Pincodes"])
+                with pt1:
+                    st.dataframe(df[col_pin].value_counts().head(8).reset_index().rename(columns={'index':'Pincode', col_pin:'CN Count'}), use_container_width=True, hide_index=True)
+                with pt2:
+                    st.dataframe(df[col_pin].value_counts().tail(8).reset_index().rename(columns={'index':'Pincode', col_pin:'CN Count'}), use_container_width=True, hide_index=True)
 
-        st.markdown("---")
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        # Missing Remarks Tracking Date-wise
-        st.subheader("📝 Missing Remarks Tracking (Date-wise)")
-        if col_i and col_aq and col_i in df.columns and col_aq in df.columns:
-            df['REMARKS_STATUS'] = df[col_aq].apply(lambda x: "Filled" if pd.notnull(x) and str(x).strip() != "" else "Missing Remarks")
-            missing_df = df[df['REMARKS_STATUS'] == "Missing Remarks"]
+        # Section 3: Missing Remarks by Booking Date
+        st.markdown("<div class='section-head'>📝 Missing Remarks Tracking (Date-Wise)</div>", unsafe_allow_html=True)
+        if col_date and col_reason:
+            df['REMARK_STATUS'] = df[col_reason].apply(lambda x: "Missing" if pd.isnull(x) or str(x).strip() == "" or str(x).upper() == "NAN" else "Filled")
+            missing_df = df[df['REMARK_STATUS'] == "Missing"]
             
             if len(missing_df) > 0:
-                missing_by_date = missing_df.groupby(missing_df[col_i].astype(str)).size().reset_index(name='Missing Remarks Count')
-                missing_by_date = missing_by_date.sort_values(by='Missing Remarks Count', ascending=False)
-                st.dataframe(missing_by_date, use_container_width=True, hide_index=True)
+                missing_summary = missing_df.groupby(df[col_date].astype(str)).size().reset_index(name='Missing Remarks Count').sort_values(by='Missing Remarks Count', ascending=False)
+                st.dataframe(missing_summary, use_container_width=True, hide_index=True)
             else:
-                st.success("All pending shipments have remarks filled!")
+                st.success("✅ Remarks are updated for all pending shipments!")
 
-        st.markdown("---")
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        # Table Display
-        st.subheader("📋 Clean Filtered Dataset (Selected Columns & Unique CN)")
-        target_cols = [c for c in [col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_i, col_j, col_l, col_m, col_aq] if c and c in df.columns]
+        # Clean Dataset View
+        st.markdown("<div class='section-head'>📋 Clean Filtered Operations Table</div>", unsafe_allow_html=True)
+        show_cols = [c for c in [col_cn, col_todist, col_date, col_mode, col_cee, col_pin, col_pkg, col_reason] if c]
         
-        filtered_df = df[target_cols + ['CALCULATED_DAYS']].sort_values(by='CALCULATED_DAYS', ascending=False)
-        st.dataframe(filtered_df.rename(columns={'CALCULATED_DAYS': 'Calculated Aging (Days)'}), use_container_width=True, hide_index=True)
+        display_df = df[show_cols + ['CALCULATED_DAYS', 'Aging_Bucket']].sort_values(by='CALCULATED_DAYS', ascending=False)
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-        # Export CSV Button
-        csv = filtered_df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Export Cleaned Report (CSV)", data=csv, file_name='OmLogistics_Cleaned_Report.csv', mime='text/csv')
+        # Download Cleaned CSV
+        csv_data = display_df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Filtered Hub Data (CSV)", data=csv_data, file_name="Floor_Ops_HubEye_Report.csv", mime="text/csv")
