@@ -139,7 +139,7 @@ if uploaded_file is not None:
     st.session_state['upload_time'] = datetime.now().strftime("%d-%b-%Y %I:%M:%S %p")
     upload_time_str = st.session_state['upload_time']
 
-    with st.spinner("Processing Operations Data & Mapping Columns..."):
+    with st.spinner("Processing Operations Data & Removing Duplicates..."):
         df_raw = pd.read_excel(uploaded_file)
         df_raw.columns = df_raw.columns.str.strip().str.upper()
 
@@ -165,26 +165,29 @@ if uploaded_file is not None:
 
         df = df_raw.copy()
 
-        # Calculate Aging Days based on Gate-In Date (Priority 1)
+        # Remove Duplicate CNs (Keeps First Entry)
+        if col_cn:
+            df = df.drop_duplicates(subset=[col_cn]).copy()
+
+        # Gate-In Date Aging Calculation
         today = pd.to_datetime(datetime.today().date())
-        
+
         if col_gatein_date:
-            df['GATE_IN_CLEAN'] = pd.to_datetime(df[col_gatein_date], errors='coerce')
-            df['CALCULATED_DAYS'] = (today - df['GATE_IN_CLEAN']).dt.days
+            gate_in_parsed = pd.to_datetime(df[col_gatein_date], format='%d-%m-%Y', errors='coerce').fillna(
+                pd.to_datetime(df[col_gatein_date], dayfirst=True, errors='coerce')
+            )
+            df['CALCULATED_DAYS'] = (today - gate_in_parsed).dt.days
             
-            # Backup: If Gate-In Date is missing, try CN Date, else existing Days column
             if col_cn_date:
-                df['CN_DATE_CLEAN'] = pd.to_datetime(df[col_cn_date], errors='coerce')
-                df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].fillna((today - df['CN_DATE_CLEAN']).dt.days)
-            
+                cn_parsed = pd.to_datetime(df[col_cn_date], dayfirst=True, errors='coerce')
+                df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].fillna((today - cn_parsed).dt.days)
             if col_days:
                 df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].fillna(pd.to_numeric(df[col_days], errors='coerce'))
                 
             df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].fillna(0).apply(lambda x: max(0, int(x)))
         elif col_cn_date:
-            df['CN_DATE_CLEAN'] = pd.to_datetime(df[col_cn_date], errors='coerce')
-            df['CALCULATED_DAYS'] = (today - df['CN_DATE_CLEAN']).dt.days.fillna(0)
-            df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].apply(lambda x: max(0, int(x)))
+            cn_parsed = pd.to_datetime(df[col_cn_date], dayfirst=True, errors='coerce')
+            df['CALCULATED_DAYS'] = (today - cn_parsed).dt.days.fillna(0).apply(lambda x: max(0, int(x)))
         elif col_days:
             df['CALCULATED_DAYS'] = pd.to_numeric(df[col_days], errors='coerce').fillna(0).astype(int)
         else:
@@ -208,7 +211,6 @@ if uploaded_file is not None:
         else:
             df['CN_PKG_NUM'] = 0
 
-        # Exact Raw Row Count (Matches Excel rows directly)
         total_cn = len(df)
         total_pkg = df['CN_PKG_NUM'].sum()
         avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
@@ -217,11 +219,11 @@ if uploaded_file is not None:
         st.markdown("<br>", unsafe_allow_html=True)
         c1, c2, c3, c4, c5 = st.columns(5)
         
-        c1.metric("Total Pending CNs", f"{total_cn:,}")
+        c1.metric("Total Unique CNs", f"{total_cn:,}")
         c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
         c3.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
         c4.metric("⚠️ 72-96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='72 Hour Above']):,}")
-        c5.metric("Avg Aging Days (Gate-In)", f"{avg_days} Days")
+        c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -284,7 +286,7 @@ if uploaded_file is not None:
             missing_df = df[df['REASON_STATUS'] == "Missing"]
             
             if len(missing_df) > 0:
-                missing_df['GATE_IN_DAY'] = pd.to_datetime(missing_df[gatein_col_to_use], errors='coerce').dt.strftime('%d-%b-%Y')
+                missing_df['GATE_IN_DAY'] = pd.to_datetime(missing_df[gatein_col_to_use], dayfirst=True, errors='coerce').dt.strftime('%d-%b-%Y')
                 missing_summary = missing_df.groupby('GATE_IN_DAY').agg(
                     Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
                     Pending_Packages_CN_PKG=('CN_PKG_NUM', 'sum')
@@ -337,7 +339,7 @@ if uploaded_file is not None:
         st.markdown("<br>", unsafe_allow_html=True)
 
         # Clean Filtered Operations Table
-        st.markdown("<div class='section-head'>📋 Clean Filtered Operations Dataset</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-head'>📋 Clean Unique Operations Dataset</div>", unsafe_allow_html=True)
         show_cols = [c for c in [col_cn, col_todist, col_gatein_date, col_cn_date, col_mode, col_cee, col_pin, col_pkg, col_reason] if c]
         
         display_df = df[show_cols + ['CALCULATED_DAYS', 'Aging_Bucket']].sort_values(by='CALCULATED_DAYS', ascending=False)
@@ -345,4 +347,4 @@ if uploaded_file is not None:
 
         # Export CSV Button
         csv_data = display_df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Filtered Hub Data (CSV)", data=csv_data, file_name="OmLogistics_Floor_Ops_Report.csv", mime="text/csv")
+        st.download_button("📥 Download Filtered Unique Data (CSV)", data=csv_data, file_name="OmLogistics_Floor_Ops_Unique.csv", mime="text/csv")
