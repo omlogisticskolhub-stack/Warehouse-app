@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-# Page Configuration - Clean High Contrast Light Dashboard Theme
+# Page Configuration - Clean High Contrast Dashboard
 st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide", initial_sidebar_state="collapsed")
 
 # Complete Black & Bold Text Styling CSS
@@ -114,7 +114,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Updated TODIST Allowed Locations List
+# TODIST Allowed Locations List
 ALLOWED_TODIST = [
     "DHULAGARH HUB KOLKATA",
     "DANKUNI KOLKATA-WEST BANGAL",
@@ -182,16 +182,16 @@ if uploaded_file is not None:
 
         df = df_raw.copy()
 
-        # 1. Deduplicate by CN Number
-        if col_cn:
-            df = df.drop_duplicates(subset=[col_cn], keep='first')
-
-        # 2. Strict Filter by TODIST Locations
+        # Clean TODIST matching without dropping rows aggressively
         if col_todist:
-            df[col_todist] = df[col_todist].astype(str).str.strip()
-            df = df[df[col_todist].isin(ALLOWED_TODIST)]
+            df[col_todist] = df[col_todist].astype(str).str.strip().str.upper()
+            allowed_todist_clean = [loc.strip().upper() for loc in ALLOWED_TODIST]
+            # Filter TODIST if present, else keep full data
+            filtered_df = df[df[col_todist].isin(allowed_todist_clean)]
+            if len(filtered_df) > 0:
+                df = filtered_df
 
-        # 3. Calculate Accurate Aging Days & Hours
+        # Calculate Aging Days
         if col_cn_date:
             df['CN_DATE_CLEAN'] = pd.to_datetime(df[col_cn_date], errors='coerce')
             today = pd.to_datetime(datetime.today().date())
@@ -204,7 +204,7 @@ if uploaded_file is not None:
 
         df['CALCULATED_HOURS'] = df['CALCULATED_DAYS'] * 24
 
-        # 4. Hours Categorization Buckets
+        # Hours Categorization Buckets
         def assign_hour_bucket(hrs):
             if hrs >= 96: return "96 Hour Above"
             elif hrs >= 72: return "72 Hour Above"
@@ -214,7 +214,7 @@ if uploaded_file is not None:
 
         df['Aging_Bucket'] = df['CALCULATED_HOURS'].apply(assign_hour_bucket)
 
-        # 5. Clean & Calculate CN_PKG
+        # Clean & Calculate CN_PKG
         if col_pkg:
             df['CN_PKG_NUM'] = pd.to_numeric(df[col_pkg], errors='coerce').fillna(0).astype(int)
         else:
@@ -297,7 +297,7 @@ if uploaded_file is not None:
             if len(missing_df) > 0:
                 missing_df['GATE_IN_DAY'] = pd.to_datetime(missing_df[gatein_col_to_use], errors='coerce').dt.strftime('%d-%b-%Y')
                 missing_summary = missing_df.groupby('GATE_IN_DAY').agg(
-                    Pending_CN_Count=(col_cn, 'count'),
+                    Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
                     Pending_Packages_CN_PKG=('CN_PKG_NUM', 'sum')
                 ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
                 
@@ -317,7 +317,7 @@ if uploaded_file is not None:
             st.markdown("<div class='section-head'>📍 CEE_PINCODE Summary (CN & PKG Count)</div>", unsafe_allow_html=True)
             if col_pin:
                 pin_summary = df.groupby(col_pin).agg(
-                    Pending_CN_Count=(col_cn, 'count'),
+                    Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
                     Pending_CN_PKG=('CN_PKG_NUM', 'sum')
                 ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
                 
@@ -333,7 +333,7 @@ if uploaded_file is not None:
             st.markdown("<div class='section-head'>🏢 Consignee Analysis (CEE)</div>", unsafe_allow_html=True)
             if col_cee:
                 cee_summary = df.groupby(col_cee).agg(
-                    Pending_CN_Count=(col_cn, 'count'),
+                    Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
                     Pending_CN_PKG=('CN_PKG_NUM', 'sum')
                 ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
                 
