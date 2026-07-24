@@ -114,23 +114,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# TODIST Allowed Locations List
-ALLOWED_TODIST = [
-    "DHULAGARH HUB KOLKATA",
-    "DANKUNI KOLKATA-WEST BANGAL",
-    "HOWRAH KOLKATA-WEST BANGAL",
-    "CHANDANI CHAWK-KOLKATA",
-    "WEST BENGAL HIDE ROAD KMA",
-    "DUNLOP KOLKATA-WEST BANGAL",
-    "KOLKATA AIRPORT",
-    "SHYAMBAZAR - KOLKATA",
-    "HOWRAH 2 BC",
-    "TATA MOTORS LTD (SPD) KOLKATA",
-    "VE COMMERCIAL SPD KOLKATA",
-    "KOLKATA CENTRAL-WEST BANGAL",
-    "HOWRAH STATION - WEST BANGAL"
-]
-
 # Track Upload Timestamp
 upload_time_str = st.session_state.get('upload_time', "Not Uploaded Yet")
 
@@ -172,8 +155,8 @@ if uploaded_file is not None:
         col_cn = find_column(['CN_CN_NO', 'CN_NO', 'WAYBILL', 'LR_NO', 'CN'], df_raw)
         col_pkg = find_column(['CN_PKG', 'PKG', 'BOX', 'QTY', 'PIECES'], df_raw)
         col_todist = find_column(['TODIST', 'DESTINATION', 'LOCATION', 'HUB'], df_raw)
+        col_gatein_date = find_column(['CHLN_GATE_IN_DATE', 'GATE_IN_DATE', 'GATE_IN', 'GATEIN'], df_raw)
         col_cn_date = find_column(['CN_DATE', 'BOOKING_DATE'], df_raw)
-        col_gatein_date = find_column(['CHLN_GATE_IN_DATE', 'GATE_IN_DATE', 'GATE_IN'], df_raw)
         col_days = find_column(['CN_TOTAL_DAYS', 'AGEING', 'DAYS', 'PENDING_DAYS'], df_raw)
         col_reason = find_column(['UNDLVRD_REASON', 'REASON', 'REMARKS', 'DELAY_REASON'], df_raw)
         col_mode = find_column(['MODE', 'SERVICE', 'PRIORITY', 'TRANSIT'], df_raw)
@@ -182,19 +165,24 @@ if uploaded_file is not None:
 
         df = df_raw.copy()
 
-        # Clean TODIST matching without dropping rows aggressively
-        if col_todist:
-            df[col_todist] = df[col_todist].astype(str).str.strip().str.upper()
-            allowed_todist_clean = [loc.strip().upper() for loc in ALLOWED_TODIST]
-            # Filter TODIST if present, else keep full data
-            filtered_df = df[df[col_todist].isin(allowed_todist_clean)]
-            if len(filtered_df) > 0:
-                df = filtered_df
-
-        # Calculate Aging Days
-        if col_cn_date:
+        # Calculate Aging Days based on Gate-In Date (Priority 1)
+        today = pd.to_datetime(datetime.today().date())
+        
+        if col_gatein_date:
+            df['GATE_IN_CLEAN'] = pd.to_datetime(df[col_gatein_date], errors='coerce')
+            df['CALCULATED_DAYS'] = (today - df['GATE_IN_CLEAN']).dt.days
+            
+            # Backup: If Gate-In Date is missing, try CN Date, else existing Days column
+            if col_cn_date:
+                df['CN_DATE_CLEAN'] = pd.to_datetime(df[col_cn_date], errors='coerce')
+                df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].fillna((today - df['CN_DATE_CLEAN']).dt.days)
+            
+            if col_days:
+                df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].fillna(pd.to_numeric(df[col_days], errors='coerce'))
+                
+            df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].fillna(0).apply(lambda x: max(0, int(x)))
+        elif col_cn_date:
             df['CN_DATE_CLEAN'] = pd.to_datetime(df[col_cn_date], errors='coerce')
-            today = pd.to_datetime(datetime.today().date())
             df['CALCULATED_DAYS'] = (today - df['CN_DATE_CLEAN']).dt.days.fillna(0)
             df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].apply(lambda x: max(0, int(x)))
         elif col_days:
@@ -220,6 +208,7 @@ if uploaded_file is not None:
         else:
             df['CN_PKG_NUM'] = 0
 
+        # Exact Raw Row Count (Matches Excel rows directly)
         total_cn = len(df)
         total_pkg = df['CN_PKG_NUM'].sum()
         avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
@@ -232,7 +221,7 @@ if uploaded_file is not None:
         c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
         c3.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
         c4.metric("⚠️ 72-96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='72 Hour Above']):,}")
-        c5.metric("Avg Aging Days", f"{avg_days} Days")
+        c5.metric("Avg Aging Days (Gate-In)", f"{avg_days} Days")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -240,7 +229,7 @@ if uploaded_file is not None:
         r1_col1, r1_col2 = st.columns(2)
 
         with r1_col1:
-            st.markdown("<div class='section-head'>⏱️ Aging Hours Breakdown</div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-head'>⏱️ Aging Hours Breakdown (Gate-In)</div>", unsafe_allow_html=True)
             bucket_order = ["96 Hour Above", "72 Hour Above", "48 Hour Above", "24 Hour Above", "24 Hour Below"]
             bucket_df = df['Aging_Bucket'].value_counts().reindex(bucket_order).fillna(0).reset_index()
             bucket_df.columns = ['Hour Bucket', 'Shipment Count']
