@@ -140,23 +140,33 @@ if uploaded_file is not None:
     try:
         df = pd.read_excel(uploaded_file)
 
+        # Column Name Standardization
+        df.columns = [str(col).strip().upper() for col in df.columns]
+
         # KPI Calculations
-        total_cns = len(df) if "CN_NO" in df.columns else 0
+        total_cns = len(df) if "CN_NO" in df.columns else len(df)
         total_pkg = (
-            df["CN_PKG"].sum() if "CN_PKG" in df.columns else df.shape[0]
-        )
-        total_wt = (
-            round(df["CN_WT"].sum() / 1000, 1)
-            if "CN_WT" in df.columns
-            else 0.0
+            int(df["CN_PKG"].sum())
+            if "CN_PKG" in df.columns
+            else (
+                int(df["PKG"].sum())
+                if "PKG" in df.columns
+                else len(df)
+            )
         )
 
+        wt_col = [c for c in df.columns if "WT" in c or "WEIGHT" in c]
+        total_wt = (
+            round(df[wt_col[0]].sum() / 1000, 1) if wt_col else 0.0
+        )
+
+        aging_col = [c for c in df.columns if "AGEING" in c or "AGING" in c]
         over_96 = 0
         avg_aging = 0.0
 
-        if "GATE_IN_AGEING_HRS" in df.columns:
-            over_96 = len(df[df["GATE_IN_AGEING_HRS"] > 96])
-            avg_aging = round(df["GATE_IN_AGEING_HRS"].mean() / 24, 1)
+        if aging_col:
+            over_96 = len(df[df[aging_col[0]] > 96])
+            avg_aging = round(df[aging_col[0]].mean() / 24, 1)
 
         # Display Metrics Row
         col1, col2, col3, col4, col5 = st.columns(5)
@@ -193,8 +203,8 @@ if uploaded_file is not None:
 
         with g1:
             st.subheader("⏱️ Aging Hours Breakdown (Gate-In)")
-            if "GATE_IN_AGEING_HRS" in df.columns:
-                bins = [0, 24, 48, 72, 96, 9999]
+            if aging_col:
+                bins = [0, 24, 48, 72, 96, 99999]
                 labels = [
                     "0-24 Hrs",
                     "24-48 Hrs",
@@ -203,7 +213,7 @@ if uploaded_file is not None:
                     ">96 Hrs",
                 ]
                 df["Age_Group"] = pd.cut(
-                    df["GATE_IN_AGEING_HRS"], bins=bins, labels=labels
+                    df[aging_col[0]], bins=bins, labels=labels
                 )
                 age_counts = (
                     df["Age_Group"].value_counts().reindex(labels).reset_index()
@@ -224,9 +234,10 @@ if uploaded_file is not None:
 
         with g2:
             st.subheader("⚠️ Delay Reasons (UNDLVRD_REASON)")
-            if "UNDLVRD_REASON" in df.columns:
+            reason_col = [c for c in df.columns if "REASON" in c or "UNDLVRD" in c]
+            if reason_col:
                 reason_df = (
-                    df["UNDLVRD_REASON"]
+                    df[reason_col[0]]
                     .fillna("No Reason Filled")
                     .value_counts()
                     .head(7)
@@ -245,7 +256,7 @@ if uploaded_file is not None:
                 )
                 fig2.update_traces(textposition="outside")
                 fig2.update_layout(
-                    showlegend=False, height=350, yaxis=dict(autorange="reverse")
+                    showlegend=False, height=350, yaxis=dict(autorange="reversed")
                 )
                 st.plotly_chart(fig2, use_container_width=True)
 
