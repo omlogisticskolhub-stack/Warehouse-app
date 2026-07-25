@@ -45,13 +45,6 @@ st.markdown("""
         color: #111827;
         font-weight: 700;
     }
-    .hub-meta {
-        text-align: right;
-        font-size: 13px;
-        color: #000000;
-        font-weight: 700;
-        line-height: 1.5;
-    }
 
     /* Metric Cards - Bold Black Font */
     div[data-testid="stMetric"] {
@@ -114,19 +107,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Track Upload Timestamp
-upload_time_str = st.session_state.get('upload_time', "Not Uploaded Yet")
-
-# Top Navigation Header
-st.markdown(f"""
+# Top Navigation Header (Without Date & Live Operations Status)
+st.markdown("""
     <div class="hub-header">
         <div>
             <div class="hub-title"><span>🚛</span> FLOOR OPS | AGING & PENDENCY ANALYTICS</div>
             <div class="hub-subtitle">Kolkata Regional Hubs - Gate-In & Delivery Delay Tracking</div>
-        </div>
-        <div class="hub-meta">
-            <b>Last Upload Time:</b> <span style="color: #d32f2f; font-weight: 800;">{upload_time_str}</span><br/>
-            <b>System Status:</b> <span style="color: #16a34a; font-weight: 800;">● Live Operations</span>
         </div>
     </div>
 """, unsafe_allow_html=True)
@@ -135,10 +121,6 @@ st.markdown(f"""
 uploaded_file = st.file_uploader("📂 Choose / Upload Operations Data Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
-    # Set Live Upload Time
-    st.session_state['upload_time'] = datetime.now().strftime("%d-%b-%Y %I:%M:%S %p")
-    upload_time_str = st.session_state['upload_time']
-
     with st.spinner("Processing Operations Data & Removing Duplicates..."):
         df_raw = pd.read_excel(uploaded_file)
         df_raw.columns = df_raw.columns.str.strip().str.upper()
