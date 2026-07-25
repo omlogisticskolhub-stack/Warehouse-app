@@ -1,7 +1,6 @@
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from datetime import datetime
 
 # Page Configuration - Clean High Contrast Dashboard
 st.set_page_config(
@@ -91,43 +90,15 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Manage Upload State and Timestamp
-if "upload_time" not in st.session_state:
-    st.session_state["upload_time"] = "Not Uploaded Yet"
-
-# File Uploader Container
-uploaded_file = st.file_uploader(
-    "📂 Choose / Upload Operations Data Sheet (.xlsx, .xls)",
-    type=["xlsx", "xls"],
-)
-
-# Update Time dynamically on file upload
-if uploaded_file is not None:
-    if (
-        "last_file_name" not in st.session_state
-        or st.session_state.last_file_name != uploaded_file.name
-    ):
-        st.session_state["upload_time"] = datetime.now().strftime(
-            "%d-%b-%Y %I:%M %p"
-        )
-        st.session_state["last_file_name"] = uploaded_file.name
-
-# Top Navigation Header with Dynamic Time Display
-time_color = (
-    "#d32f2f"
-    if st.session_state["upload_time"] == "Not Uploaded Yet"
-    else "#16a34a"
-)
-
+# Top Navigation Header (No Upload Time, Clean & Simple)
 st.markdown(
-    f"""
+    """
     <div class="hub-header">
         <div>
             <div class="hub-title">🚚 FLOOR OPS | AGING & PENDENCY ANALYTICS</div>
             <div class="hub-subtitle">Kolkata Regional Hubs - Gate-In & Delivery Delay Tracking</div>
         </div>
         <div class="hub-meta">
-            <b>Last Upload Time:</b> <span style="color: {time_color}; font-weight: 800;">{st.session_state['upload_time']}</span><br/>
             <b>System Status:</b> <span style="color: #16a34a; font-weight: 800;">● Live Operations</span>
         </div>
     </div>
@@ -135,38 +106,40 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Data Processing logic when file is present
+# File Uploader
+uploaded_file = st.file_uploader(
+    "📂 Choose / Upload Operations Data Sheet (.xlsx, .xls)",
+    type=["xlsx", "xls"],
+)
+
+# Data Processing Logic
 if uploaded_file is not None:
     try:
         df = pd.read_excel(uploaded_file)
 
-        # Column Name Standardization
-        df.columns = [str(col).strip().upper() for col in df.columns]
+        # Standardizing column names for matching
+        cols = {str(c).strip().upper(): c for c in df.columns}
 
-        # KPI Calculations
-        total_cns = len(df) if "CN_NO" in df.columns else len(df)
-        total_pkg = (
-            int(df["CN_PKG"].sum())
-            if "CN_PKG" in df.columns
-            else (
-                int(df["PKG"].sum())
-                if "PKG" in df.columns
-                else len(df)
-            )
+        # Calculations
+        cn_col = cols.get("CN_NO", list(df.columns)[0])
+        total_cns = df[cn_col].nunique()
+
+        pkg_col = cols.get("CN_PKG", cols.get("PKG", None))
+        total_pkg = int(df[pkg_col].sum()) if pkg_col else len(df)
+
+        wt_col = cols.get("CN_WT", cols.get("WEIGHT", None))
+        total_wt = round(df[wt_col].sum() / 1000, 1) if wt_col else 0.0
+
+        aging_col = cols.get(
+            "GATE_IN_AGEING_HRS",
+            cols.get("AGEING_HRS", cols.get("AGEING", None)),
         )
-
-        wt_col = [c for c in df.columns if "WT" in c or "WEIGHT" in c]
-        total_wt = (
-            round(df[wt_col[0]].sum() / 1000, 1) if wt_col else 0.0
-        )
-
-        aging_col = [c for c in df.columns if "AGEING" in c or "AGING" in c]
         over_96 = 0
         avg_aging = 0.0
 
         if aging_col:
-            over_96 = len(df[df[aging_col[0]] > 96])
-            avg_aging = round(df[aging_col[0]].mean() / 24, 1)
+            over_96 = len(df[df[aging_col] > 96])
+            avg_aging = round(df[aging_col].mean() / 24, 1)
 
         # Display Metrics Row
         col1, col2, col3, col4, col5 = st.columns(5)
@@ -213,7 +186,7 @@ if uploaded_file is not None:
                     ">96 Hrs",
                 ]
                 df["Age_Group"] = pd.cut(
-                    df[aging_col[0]], bins=bins, labels=labels
+                    df[aging_col], bins=bins, labels=labels
                 )
                 age_counts = (
                     df["Age_Group"].value_counts().reindex(labels).reset_index()
@@ -234,10 +207,12 @@ if uploaded_file is not None:
 
         with g2:
             st.subheader("⚠️ Delay Reasons (UNDLVRD_REASON)")
-            reason_col = [c for c in df.columns if "REASON" in c or "UNDLVRD" in c]
+            reason_col = cols.get(
+                "UNDLVRD_REASON", cols.get("REASON", None)
+            )
             if reason_col:
                 reason_df = (
-                    df[reason_col[0]]
+                    df[reason_col]
                     .fillna("No Reason Filled")
                     .value_counts()
                     .head(7)
@@ -255,10 +230,8 @@ if uploaded_file is not None:
                     color_continuous_scale="Reds",
                 )
                 fig2.update_traces(textposition="outside")
-                fig2.update_layout(
-                    showlegend=False, height=350, yaxis=dict(autorange="reversed")
-                )
+                fig2.update_layout(showlegend=False, height=350)
                 st.plotly_chart(fig2, use_container_width=True)
 
     except Exception as e:
-        st.error(f"Error processing uploaded file: {e}")
+        st.error(f"Error reading file: {e}")
