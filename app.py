@@ -331,16 +331,21 @@ if st.session_state["processed_df"] is not None:
                         
                         if unique_dates:
                             # Radio button for Date Selection (Click to View)
-                            selected_date = st.radio("🗓️ Click Date to View TODIST Breakdown:", options=unique_dates, key="radio_date_picker")
+                            selected_date = st.radio("🗓️ Click Date to View Details:", options=unique_dates, key="radio_date_picker")
                             
-                            filtered_missing = missing_df[missing_df['GATE_IN_DAY'] == selected_date]
+                            filtered_missing = missing_df[missing_df['GATE_IN_DAY'] == selected_date].copy()
+
+                            # Helper function to join CN numbers as a comma-separated string
+                            def join_cns(series):
+                                return ", ".join(series.astype(str).unique())
 
                             todist_missing_summary = filtered_missing.groupby(col_todist).agg(
                                 Blank_Reason_CNs=(col_cn if col_cn else col_todist, 'count'),
-                                Pending_Packages=('CN_PKG_NUM', 'sum')
+                                Pending_Packages=('CN_PKG_NUM', 'sum'),
+                                Pending_CN_List=(col_cn if col_cn else col_todist, join_cns)
                             ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
                             
-                            todist_missing_summary.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG']
+                            todist_missing_summary.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Pending CN Numbers']
                             st.dataframe(todist_missing_summary, use_container_width=True, hide_index=True, height=160)
                     else:
                         st.info("TODIST column missing in dataset.")
