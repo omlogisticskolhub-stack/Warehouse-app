@@ -92,6 +92,23 @@ st.markdown("""
         padding: 10px;
     }
 
+    /* Tabs Adjustment to align with right-side tables */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 38px;
+        padding-top: 0px;
+        padding-bottom: 0px;
+        font-weight: 800 !important;
+    }
+
+    /* Radio buttons styling for date picker */
+    div[role="radiogroup"] {
+        flex-direction: row !important;
+        gap: 12px;
+    }
+
     /* Hide Unwanted UI Overlays */
     header { visibility: hidden; display: none !important; }
     footer { visibility: hidden; display: none !important; }
@@ -292,30 +309,39 @@ if st.session_state["processed_df"] is not None:
             missing_df = df[df['REASON_STATUS'] == "Missing"].copy()
             
             if len(missing_df) > 0:
-                missing_df['GATE_IN_DAY'] = pd.to_datetime(missing_df[gatein_col_to_use], dayfirst=True, errors='coerce').dt.strftime('%d-%b-%Y')
+                missing_df['DATE_OBJ'] = pd.to_datetime(missing_df[gatein_col_to_use], dayfirst=True, errors='coerce')
+                missing_df['GATE_IN_DAY'] = missing_df['DATE_OBJ'].dt.strftime('%d-%b-%Y')
                 
-                # Tab 1: Date-wise Unfilled Reasons
-                # Tab 2: Date + TODIST (Destination) Unfilled Reasons
-                tab_m1, tab_m2 = st.tabs(["📅 Date Wise", "🏢 Date + TODIST Wise"])
+                tab_m1, tab_m2 = st.tabs(["📅 All Dates Summary", "🎯 Select Specific Date"])
                 
                 with tab_m1:
-                    missing_summary = missing_df.groupby('GATE_IN_DAY').agg(
+                    missing_summary = missing_df.groupby(['DATE_OBJ', 'GATE_IN_DAY']).agg(
                         Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
                         Pending_Packages_CN_PKG=('CN_PKG_NUM', 'sum')
-                    ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
+                    ).reset_index().sort_values(by='DATE_OBJ', ascending=False)
                     
-                    missing_summary.columns = ['Gate In Date', 'Blank Reason CNs', 'Total Pending PKG']
-                    st.dataframe(missing_summary, use_container_width=True, hide_index=True, height=230)
+                    missing_summary_display = missing_summary[['GATE_IN_DAY', 'Pending_CN_Count', 'Pending_Packages_CN_PKG']]
+                    missing_summary_display.columns = ['Gate In Date', 'Blank Reason CNs', 'Total Pending PKG']
+                    st.dataframe(missing_summary_display, use_container_width=True, hide_index=True, height=225)
                 
                 with tab_m2:
                     if col_todist:
-                        todist_missing_summary = missing_df.groupby(['GATE_IN_DAY', col_todist]).agg(
-                            Blank_Reason_CNs=(col_cn if col_cn else col_todist, 'count'),
-                            Pending_Packages=('CN_PKG_NUM', 'sum')
-                        ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
+                        # Fetch Dates sorted latest first
+                        unique_dates = missing_df.sort_values(by='DATE_OBJ', ascending=False)['GATE_IN_DAY'].dropna().unique().tolist()
                         
-                        todist_missing_summary.columns = ['Gate In Date', 'TODIST Hub', 'Blank Reason CNs', 'Pending PKG']
-                        st.dataframe(todist_missing_summary, use_container_width=True, hide_index=True, height=230)
+                        if unique_dates:
+                            # Radio button for Date Selection (Click to View)
+                            selected_date = st.radio("🗓️ Click Date to View TODIST Breakdown:", options=unique_dates, key="radio_date_picker")
+                            
+                            filtered_missing = missing_df[missing_df['GATE_IN_DAY'] == selected_date]
+
+                            todist_missing_summary = filtered_missing.groupby(col_todist).agg(
+                                Blank_Reason_CNs=(col_cn if col_cn else col_todist, 'count'),
+                                Pending_Packages=('CN_PKG_NUM', 'sum')
+                            ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
+                            
+                            todist_missing_summary.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG']
+                            st.dataframe(todist_missing_summary, use_container_width=True, hide_index=True, height=160)
                     else:
                         st.info("TODIST column missing in dataset.")
             else:
