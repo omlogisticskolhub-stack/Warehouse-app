@@ -289,24 +289,42 @@ if st.session_state["processed_df"] is not None:
         
         if gatein_col_to_use and col_reason:
             df['REASON_STATUS'] = df[col_reason].apply(lambda x: "Missing" if pd.isnull(x) or str(x).strip() == "" or str(x).upper() == "NAN" else "Filled")
-            missing_df = df[df['REASON_STATUS'] == "Missing"]
+            missing_df = df[df['REASON_STATUS'] == "Missing"].copy()
             
             if len(missing_df) > 0:
                 missing_df['GATE_IN_DAY'] = pd.to_datetime(missing_df[gatein_col_to_use], dayfirst=True, errors='coerce').dt.strftime('%d-%b-%Y')
-                missing_summary = missing_df.groupby('GATE_IN_DAY').agg(
-                    Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
-                    Pending_Packages_CN_PKG=('CN_PKG_NUM', 'sum')
-                ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
                 
-                missing_summary.columns = ['Gate In Date', 'Unfilled CN Count', 'Total Pending PKG']
-                st.dataframe(missing_summary, use_container_width=True, hide_index=True, height=280)
+                # Tab 1: Date-wise Unfilled Reasons
+                # Tab 2: Date + TODIST (Destination) Unfilled Reasons
+                tab_m1, tab_m2 = st.tabs(["📅 Date Wise", "🏢 Date + TODIST Wise"])
+                
+                with tab_m1:
+                    missing_summary = missing_df.groupby('GATE_IN_DAY').agg(
+                        Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
+                        Pending_Packages_CN_PKG=('CN_PKG_NUM', 'sum')
+                    ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
+                    
+                    missing_summary.columns = ['Gate In Date', 'Blank Reason CNs', 'Total Pending PKG']
+                    st.dataframe(missing_summary, use_container_width=True, hide_index=True, height=230)
+                
+                with tab_m2:
+                    if col_todist:
+                        todist_missing_summary = missing_df.groupby(['GATE_IN_DAY', col_todist]).agg(
+                            Blank_Reason_CNs=(col_cn if col_cn else col_todist, 'count'),
+                            Pending_Packages=('CN_PKG_NUM', 'sum')
+                        ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
+                        
+                        todist_missing_summary.columns = ['Gate In Date', 'TODIST Hub', 'Blank Reason CNs', 'Pending PKG']
+                        st.dataframe(todist_missing_summary, use_container_width=True, hide_index=True, height=230)
+                    else:
+                        st.info("TODIST column missing in dataset.")
             else:
                 st.success("✅ UNDLVRD_REASON is filled for all Gate-In shipments!")
         else:
             st.info("Gate-In Date or UNDLVRD_REASON column not found.")
 
     with s2_col2:
-        st.markdown("<div class='section-head'>🎯 TODIST Destination Load Summary</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-head'>🎯 Total TODIST Destination Load Summary</div>", unsafe_allow_html=True)
         if col_todist:
             todist_summary = df.groupby(col_todist).agg(
                 Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
