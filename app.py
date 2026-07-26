@@ -107,7 +107,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Top Navigation Header (Without Date & Live Operations Status)
+# Top Navigation Header
 st.markdown("""
     <div class="hub-header">
         <div>
@@ -120,6 +120,11 @@ st.markdown("""
 # File Uploader
 uploaded_file = st.file_uploader("📂 Choose / Upload Operations Data Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
 
+# Session State Initialization
+if "processed_df" not in st.session_state:
+    st.session_state["processed_df"] = None
+
+# Process File if Uploaded
 if uploaded_file is not None:
     with st.spinner("Processing Operations Data & Removing Duplicates..."):
         df_raw = pd.read_excel(uploaded_file)
@@ -193,74 +198,93 @@ if uploaded_file is not None:
         else:
             df['CN_PKG_NUM'] = 0
 
-        total_cn = len(df)
-        total_pkg = df['CN_PKG_NUM'].sum()
-        avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
+        # Save to Session State
+        st.session_state["processed_df"] = df
+        st.session_state["cols"] = {
+            "cn": col_cn, "pkg": col_pkg, "todist": col_todist,
+            "gatein": col_gatein_date, "cndate": col_cn_date, "reason": col_reason,
+            "mode": col_mode, "cee": col_cee, "pin": col_pin
+        }
 
-        # KPI Display Row
-        st.markdown("<br>", unsafe_allow_html=True)
-        c1, c2, c3, c4, c5 = st.columns(5)
-        
-        c1.metric("Total Unique CNs", f"{total_cn:,}")
-        c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
-        c3.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
-        c4.metric("⚠️ 72-96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='72 Hour Above']):,}")
-        c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
+# Render Dashboard if Data exists in Session State
+if st.session_state["processed_df"] is not None:
+    df = st.session_state["processed_df"]
+    cols = st.session_state["cols"]
 
-        st.markdown("<br>", unsafe_allow_html=True)
+    col_cn, col_pkg, col_todist = cols["cn"], cols["pkg"], cols["todist"]
+    col_gatein_date, col_cn_date, col_reason = cols["gatein"], cols["cndate"], cols["reason"]
+    col_mode, col_cee, col_pin = cols["mode"], cols["cee"], cols["pin"]
 
-        # SECTION 1: Aging Hours & Undelivered Reasons
-        r1_col1, r1_col2 = st.columns(2)
+    total_cn = len(df)
+    total_pkg = df['CN_PKG_NUM'].sum()
+    avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
 
-        with r1_col1:
-            st.markdown("<div class='section-head'>⏱️ Aging Hours Breakdown (Gate-In)</div>", unsafe_allow_html=True)
-            bucket_order = ["96 Hour Above", "72 Hour Above", "48 Hour Above", "24 Hour Above", "24 Hour Below"]
-            bucket_df = df['Aging_Bucket'].value_counts().reindex(bucket_order).fillna(0).reset_index()
-            bucket_df.columns = ['Hour Bucket', 'Shipment Count']
+    # KPI Display Row
+    st.markdown("<br>", unsafe_allow_html=True)
+    c1, c2, c3, c4, c5 = st.columns(5)
+    
+    c1.metric("Total Unique CNs", f"{total_cn:,}")
+    c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
+    c3.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
+    c4.metric("⚠️ 72-96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='72 Hour Above']):,}")
+    c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
 
-            fig_bucket = px.bar(
-                bucket_df, x='Hour Bucket', y='Shipment Count', text='Shipment Count',
-                color='Hour Bucket',
-                color_discrete_map={
-                    "96 Hour Above": "#b91c1c",
-                    "72 Hour Above": "#ef4444",
-                    "48 Hour Above": "#f97316",
-                    "24 Hour Above": "#eab308",
-                    "24 Hour Below": "#22c55e"
-                }
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # SECTION 1: Aging Hours & Undelivered Reasons
+    r1_col1, r1_col2 = st.columns(2)
+
+    with r1_col1:
+        st.markdown("<div class='section-head'>⏱️ Aging Hours Breakdown (Gate-In)</div>", unsafe_allow_html=True)
+        bucket_order = ["96 Hour Above", "72 Hour Above", "48 Hour Above", "24 Hour Above", "24 Hour Below"]
+        bucket_df = df['Aging_Bucket'].value_counts().reindex(bucket_order).fillna(0).reset_index()
+        bucket_df.columns = ['Hour Bucket', 'Shipment Count']
+
+        fig_bucket = px.bar(
+            bucket_df, x='Hour Bucket', y='Shipment Count', text='Shipment Count',
+            color='Hour Bucket',
+            color_discrete_map={
+                "96 Hour Above": "#b91c1c",
+                "72 Hour Above": "#ef4444",
+                "48 Hour Above": "#f97316",
+                "24 Hour Above": "#eab308",
+                "24 Hour Below": "#22c55e"
+            }
+        )
+        fig_bucket.update_layout(
+            showlegend=False, height=300, margin=dict(l=0, r=0, t=10, b=0),
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#000000', size=12, family='Inter')
+        )
+        fig_bucket.update_traces(textfont_size=13, textfont_color='black')
+        st.plotly_chart(fig_bucket, use_container_width=True)
+
+    with r1_col2:
+        st.markdown("<div class='section-head'>⚠️ Delay Reasons (UNDLVRD_REASON)</div>", unsafe_allow_html=True)
+        if col_reason:
+            reason_df = df[col_reason].fillna("No Reason Filled").value_counts().head(7).reset_index()
+            reason_df.columns = ['Reason', 'Count']
+
+            fig_reason = px.bar(
+                reason_df, x='Count', y='Reason', orientation='h', text='Count',
+                color='Count', color_continuous_scale='Reds'
             )
-            fig_bucket.update_layout(
+            fig_reason.update_layout(
                 showlegend=False, height=300, margin=dict(l=0, r=0, t=10, b=0),
+                yaxis={'categoryorder': 'total ascending'},
                 paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='#000000', size=12, family='Inter')
             )
-            fig_bucket.update_traces(textfont_size=13, textfont_color='black')
-            st.plotly_chart(fig_bucket, use_container_width=True)
+            fig_reason.update_traces(textfont_size=13, textfont_color='black')
+            st.plotly_chart(fig_reason, use_container_width=True)
 
-        with r1_col2:
-            st.markdown("<div class='section-head'>⚠️ Delay Reasons (UNDLVRD_REASON)</div>", unsafe_allow_html=True)
-            if col_reason:
-                reason_df = df[col_reason].fillna("No Reason Filled").value_counts().head(7).reset_index()
-                reason_df.columns = ['Reason', 'Count']
+    st.markdown("<br>", unsafe_allow_html=True)
 
-                fig_reason = px.bar(
-                    reason_df, x='Count', y='Reason', orientation='h', text='Count',
-                    color='Count', color_continuous_scale='Reds'
-                )
-                fig_reason.update_layout(
-                    showlegend=False, height=300, margin=dict(l=0, r=0, t=10, b=0),
-                    yaxis={'categoryorder': 'total ascending'},
-                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='#000000', size=12, family='Inter')
-                )
-                fig_reason.update_traces(textfont_size=13, textfont_color='black')
-                st.plotly_chart(fig_reason, use_container_width=True)
+    # SECTION 2: SIDE-BY-SIDE (MISSING REASONS & TODIST DESTINATION LOAD)
+    s2_col1, s2_col2 = st.columns(2)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # SECTION 2: MISSING UNDLVRD_REASON BY CHLN_GATE_IN_DATE
-        st.markdown("<div class='section-head'>📅 Missing UNDLVRD_REASON Tracking (by Gate-In Date)</div>", unsafe_allow_html=True)
-        
+    with s2_col1:
+        st.markdown("<div class='section-head'>📅 Missing UNDLVRD_REASON Tracking</div>", unsafe_allow_html=True)
         gatein_col_to_use = col_gatein_date if col_gatein_date else col_cn_date
         
         if gatein_col_to_use and col_reason:
@@ -274,59 +298,72 @@ if uploaded_file is not None:
                     Pending_Packages_CN_PKG=('CN_PKG_NUM', 'sum')
                 ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
                 
-                missing_summary.columns = ['Gate In Date (CHLN_GATE_IN_DATE)', 'Unfilled Reason CN Count', 'Total Pending CN_PKG']
-                st.dataframe(missing_summary, use_container_width=True, hide_index=True)
+                missing_summary.columns = ['Gate In Date', 'Unfilled CN Count', 'Total Pending PKG']
+                st.dataframe(missing_summary, use_container_width=True, hide_index=True, height=280)
             else:
                 st.success("✅ UNDLVRD_REASON is filled for all Gate-In shipments!")
         else:
-            st.info("CHLN_GATE_IN_DATE or UNDLVRD_REASON column not found in file.")
+            st.info("Gate-In Date or UNDLVRD_REASON column not found.")
 
-        st.markdown("<br>", unsafe_allow_html=True)
+    with s2_col2:
+        st.markdown("<div class='section-head'>🎯 TODIST Destination Load Summary</div>", unsafe_allow_html=True)
+        if col_todist:
+            todist_summary = df.groupby(col_todist).agg(
+                Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
+                Pending_CN_PKG=('CN_PKG_NUM', 'sum')
+            ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
+            
+            todist_summary.columns = ['Destination Hub (TODIST)', 'Pending CN Count', 'Total Pending PKG']
+            st.dataframe(todist_summary, use_container_width=True, hide_index=True, height=280)
+        else:
+            st.info("TODIST column not found in uploaded file.")
 
-        # SECTION 3: CEE_PINCODE & CONSIGNEE ANALYSIS
-        r2_col1, r2_col2 = st.columns(2)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-        with r2_col1:
-            st.markdown("<div class='section-head'>📍 CEE_PINCODE Summary (CN & PKG Count)</div>", unsafe_allow_html=True)
-            if col_pin:
-                pin_summary = df.groupby(col_pin).agg(
-                    Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
-                    Pending_CN_PKG=('CN_PKG_NUM', 'sum')
-                ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
-                
-                pin_summary.columns = ['Pincode (CEE_PINCODE)', 'Pending CN Count', 'Pending CN_PKG (Boxes)']
-                
-                t_pin1, t_pin2 = st.tabs(["📍 Top Pending Pincodes", "📌 Lowest Pending Pincodes"])
-                with t_pin1:
-                    st.dataframe(pin_summary.head(10), use_container_width=True, hide_index=True)
-                with t_pin2:
-                    st.dataframe(pin_summary.tail(10), use_container_width=True, hide_index=True)
+    # SECTION 3: CEE_PINCODE & CONSIGNEE ANALYSIS
+    r2_col1, r2_col2 = st.columns(2)
 
-        with r2_col2:
-            st.markdown("<div class='section-head'>🏢 Consignee Analysis (CEE)</div>", unsafe_allow_html=True)
-            if col_cee:
-                cee_summary = df.groupby(col_cee).agg(
-                    Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
-                    Pending_CN_PKG=('CN_PKG_NUM', 'sum')
-                ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
-                
-                cee_summary.columns = ['Consignee Name (CEE)', 'Pending CN Count', 'Pending CN_PKG (Boxes)']
-                
-                t_cee1, t_cee2 = st.tabs(["🔥 Top Pending Clients", "📉 Lowest Pending Clients"])
-                with t_cee1:
-                    st.dataframe(cee_summary.head(10), use_container_width=True, hide_index=True)
-                with t_cee2:
-                    st.dataframe(cee_summary.tail(10), use_container_width=True, hide_index=True)
+    with r2_col1:
+        st.markdown("<div class='section-head'>📍 CEE_PINCODE Summary (CN & PKG Count)</div>", unsafe_allow_html=True)
+        if col_pin:
+            pin_summary = df.groupby(col_pin).agg(
+                Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
+                Pending_CN_PKG=('CN_PKG_NUM', 'sum')
+            ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
+            
+            pin_summary.columns = ['Pincode (CEE_PINCODE)', 'Pending CN Count', 'Pending CN_PKG (Boxes)']
+            
+            t_pin1, t_pin2 = st.tabs(["📍 Top Pending Pincodes", "📌 Lowest Pending Pincodes"])
+            with t_pin1:
+                st.dataframe(pin_summary.head(10), use_container_width=True, hide_index=True)
+            with t_pin2:
+                st.dataframe(pin_summary.tail(10), use_container_width=True, hide_index=True)
 
-        st.markdown("<br>", unsafe_allow_html=True)
+    with r2_col2:
+        st.markdown("<div class='section-head'>🏢 Consignee Analysis (CEE)</div>", unsafe_allow_html=True)
+        if col_cee:
+            cee_summary = df.groupby(col_cee).agg(
+                Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
+                Pending_CN_PKG=('CN_PKG_NUM', 'sum')
+            ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
+            
+            cee_summary.columns = ['Consignee Name (CEE)', 'Pending CN Count', 'Pending CN_PKG (Boxes)']
+            
+            t_cee1, t_cee2 = st.tabs(["🔥 Top Pending Clients", "📉 Lowest Pending Clients"])
+            with t_cee1:
+                st.dataframe(cee_summary.head(10), use_container_width=True, hide_index=True)
+            with t_cee2:
+                st.dataframe(cee_summary.tail(10), use_container_width=True, hide_index=True)
 
-        # Clean Filtered Operations Table
-        st.markdown("<div class='section-head'>📋 Clean Unique Operations Dataset</div>", unsafe_allow_html=True)
-        show_cols = [c for c in [col_cn, col_todist, col_gatein_date, col_cn_date, col_mode, col_cee, col_pin, col_pkg, col_reason] if c]
-        
-        display_df = df[show_cols + ['CALCULATED_DAYS', 'Aging_Bucket']].sort_values(by='CALCULATED_DAYS', ascending=False)
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-        # Export CSV Button
-        csv_data = display_df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Filtered Unique Data (CSV)", data=csv_data, file_name="OmLogistics_Floor_Ops_Unique.csv", mime="text/csv")
+    # Clean Filtered Operations Table
+    st.markdown("<div class='section-head'>📋 Clean Unique Operations Dataset</div>", unsafe_allow_html=True)
+    show_cols = [c for c in [col_cn, col_todist, col_gatein_date, col_cn_date, col_mode, col_cee, col_pin, col_pkg, col_reason] if c]
+    
+    display_df = df[show_cols + ['CALCULATED_DAYS', 'Aging_Bucket']].sort_values(by='CALCULATED_DAYS', ascending=False)
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    # Export CSV Button
+    csv_data = display_df.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Download Filtered Unique Data (CSV)", data=csv_data, file_name="OmLogistics_Floor_Ops_Unique.csv", mime="text/csv")
