@@ -20,6 +20,12 @@ st.markdown("""
         background-color: #f4f6f9;
     }
 
+    /* Sidebar Styling for Uploader */
+    [data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        border-right: 2px solid #cbd5e1;
+    }
+
     /* Top Navigation / Header Bar */
     .hub-header {
         background-color: #ffffff;
@@ -134,8 +140,12 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# File Uploader
-uploaded_file = st.file_uploader("📂 Choose / Upload Operations Data Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
+# SIDEBAR FILE UPLOADER (Left-Side Upload Box)
+with st.sidebar:
+    st.markdown("### 📂 Data Import Controls")
+    uploaded_file = st.file_uploader("Upload Operations Excel Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
+    st.markdown("---")
+    st.info("💡 **Tip:** Upload your daily file here. Click the **<** icon at top-left to hide/collapse this sidebar for a clean screen view.")
 
 # Helper Function to Format Weight smartly into Ton or KG
 def format_weight(kg_val):
@@ -236,6 +246,10 @@ if uploaded_file is not None:
             "mode": col_mode, "cee": col_cee, "pin": col_pin
         }
 
+# Prompt user to upload file if not loaded yet
+if st.session_state["processed_df"] is None:
+    st.warning("👈 Please open the Left Sidebar (click the arrow on top-left) and upload your Operations Data Sheet (.xlsx) to view the dashboard.")
+
 # Render Dashboard if Data exists in Session State
 if st.session_state["processed_df"] is not None:
     df_base = st.session_state["processed_df"]
@@ -245,8 +259,23 @@ if st.session_state["processed_df"] is not None:
     col_gatein_date, col_cn_date, col_reason = cols["gatein"], cols["cndate"], cols["reason"]
     col_mode, col_cee, col_pin = cols["mode"], cols["cee"], cols["pin"]
 
-    # --- MULTI-SELECT DELIVERY HUBS FILTER ---
+    # --- TOP KPI METRICS ROW (MOVED TO TOP) ---
+    total_cn = len(df_base)
+    total_pkg = df_base['CN_PKG_NUM'].sum()
+    total_wt = df_base['CN_WT_NUM'].sum()
+    avg_days = round(df_base['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    
+    c1.metric("Total Unique CNs", f"{total_cn:,}")
+    c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
+    c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
+    c4.metric("🚨 >96 Hours Pendency", f"{len(df_base[df_base['Aging_Bucket']=='96 Hour Above']):,}")
+    c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
+
     st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- MULTI-SELECT DELIVERY HUBS FILTER (MOVED BELOW KPIs) ---
     if col_todist:
         all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
         selected_hubs = st.multiselect(
@@ -261,20 +290,6 @@ if st.session_state["processed_df"] is not None:
             df = df_base.copy()
     else:
         df = df_base.copy()
-
-    total_cn = len(df)
-    total_pkg = df['CN_PKG_NUM'].sum()
-    total_wt = df['CN_WT_NUM'].sum()
-    avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
-
-    # KPI Display Row
-    c1, c2, c3, c4, c5 = st.columns(5)
-    
-    c1.metric("Total Unique CNs", f"{total_cn:,}")
-    c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
-    c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
-    c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
-    c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -342,7 +357,7 @@ if st.session_state["processed_df"] is not None:
                 missing_df['DATE_OBJ'] = pd.to_datetime(missing_df[gatein_col_to_use], dayfirst=True, errors='coerce')
                 missing_df['GATE_IN_DAY'] = missing_df['DATE_OBJ'].dt.strftime('%d-%b-%Y')
                 
-                tab_m1, tab_m2, tab_m3 = st.tabs(["📅 All Dates", "🎯 Specific Date", "🏢 To District Wise"])
+                tab_m1, tab_m2, tab_m3 = st.tabs(["📅 All Dates", "🎯 Specific Date", "🏢 TODIST Wise"])
                 
                 # Tab 1: Date Summary
                 with tab_m1:
@@ -395,7 +410,7 @@ if st.session_state["processed_df"] is not None:
                     else:
                         st.info("TODIST column missing in dataset.")
 
-                # Tab 3: To District Wise Summary
+                # Tab 3: TODIST Wise Summary
                 with tab_m3:
                     if col_todist:
                         ntc_dest_summary = missing_df.groupby(col_todist).agg(
@@ -408,10 +423,10 @@ if st.session_state["processed_df"] is not None:
 
                         if col_wt:
                             display_ntc = ntc_dest_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Weight_Formatted']]
-                            display_ntc.columns = ['Destination Hub (TODIST)', 'Blank Reason CNs', 'Pending PKG', 'Weight Load']
+                            display_ntc.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Weight Load']
                         else:
                             display_ntc = ntc_dest_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages']]
-                            display_ntc.columns = ['Destination Hub (TODIST)', 'Blank Reason CNs', 'Pending PKG']
+                            display_ntc.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG']
 
                         st.dataframe(display_ntc, use_container_width=True, hide_index=True, height=225)
                     else:
@@ -422,7 +437,7 @@ if st.session_state["processed_df"] is not None:
             st.info("Gate-In Date or UNDLVRD_REASON column not found.")
 
     with s2_col2:
-        st.markdown("<div class='section-head'>🎯 Total TODIST Destination Load Summary</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-head'>🎯 Total TODIST Load Summary</div>", unsafe_allow_html=True)
         if col_todist:
             todist_summary = df.groupby(col_todist).agg(
                 Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
@@ -434,10 +449,10 @@ if st.session_state["processed_df"] is not None:
             
             if col_wt:
                 display_load = todist_summary[[col_todist, 'Pending_CN_Count', 'Pending_CN_PKG', 'Weight_Formatted']]
-                display_load.columns = ['Destination Hub (TODIST)', 'Pending CN Count', 'Total Pending PKG', 'Total Weight Load']
+                display_load.columns = ['TODIST Hub', 'Pending CN Count', 'Total Pending PKG', 'Total Weight Load']
             else:
                 display_load = todist_summary[[col_todist, 'Pending_CN_Count', 'Pending_CN_PKG']]
-                display_load.columns = ['Destination Hub (TODIST)', 'Pending CN Count', 'Total Pending PKG']
+                display_load.columns = ['TODIST Hub', 'Pending CN Count', 'Total Pending PKG']
 
             st.dataframe(display_load, use_container_width=True, hide_index=True, height=280)
         else:
