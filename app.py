@@ -3,10 +3,14 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-# Page Configuration - Clean High Contrast Dashboard
-st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide", initial_sidebar_state="collapsed")
+# Page Configuration - Left Sidebar open by default for easy upload
+st.set_page_config(
+    page_title="Floor Ops Dashboard - Om Logistics", 
+    layout="wide", 
+    initial_sidebar_state="expanded"  # Pehle se khula rahega taaki easily upload ho sake
+)
 
-# Complete Black & Bold Text Styling CSS
+# Custom Styling - High Contrast Black Text & Smooth Hover Sidebar Adjustments
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
@@ -20,10 +24,18 @@ st.markdown("""
         background-color: #f4f6f9;
     }
 
-    /* Sidebar Styling for Uploader */
+    /* Make Sidebar Header & Collapse Button Visually Clear */
     [data-testid="stSidebar"] {
         background-color: #ffffff !important;
-        border-right: 2px solid #cbd5e1;
+        border-right: 3px solid #d32f2f;
+    }
+
+    /* Highlight Sidebar Collapse Button */
+    button[data-testid="aria-label-collapse-sidebar"], 
+    button[data-testid="baseButton-headerNoPadding"] {
+        background-color: #d32f2f !important;
+        color: white !important;
+        border-radius: 50% !important;
     }
 
     /* Top Navigation / Header Bar */
@@ -92,8 +104,8 @@ st.markdown("""
 
     /* Clean Uploader Box */
     div[data-testid="stFileUploader"] {
-        background-color: #ffffff;
-        border: 2px dashed #94a3b8;
+        background-color: #f8fafc;
+        border: 2px dashed #d32f2f;
         border-radius: 8px;
         padding: 10px;
     }
@@ -115,11 +127,9 @@ st.markdown("""
         gap: 12px;
     }
 
-    /* Hide Unwanted UI Overlays */
-    header { visibility: hidden; display: none !important; }
+    /* Hide Unwanted UI Overlays but keep Sidebar Toggle Visible */
     footer { visibility: hidden; display: none !important; }
     #MainMenu { visibility: hidden; display: none !important; }
-    [data-testid="stHeader"] { visibility: hidden; display: none !important; }
     [data-testid="stAppToolbar"] { display: none !important; }
     [data-testid="stToolbar"] { display: none !important; }
     .viewerBadge_container__1S-5D, .viewerBadge_link__1S-5D { display: none !important; }
@@ -140,12 +150,13 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# SIDEBAR FILE UPLOADER (Left-Side Upload Box)
+# SIDEBAR FILE UPLOADER (Left Side Panel)
 with st.sidebar:
-    st.markdown("### 📂 Data Import Controls")
-    uploaded_file = st.file_uploader("Upload Operations Excel Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
+    st.markdown("## 📁 Upload Panel")
+    st.markdown("यहाँ अपनी एक्सेल फ़ाइल अपलोड करें:")
+    uploaded_file = st.file_uploader("Choose Excel File (.xlsx, .xls)", type=["xlsx", "xls"])
     st.markdown("---")
-    st.info("💡 **Tip:** Upload your daily file here. Click the **<** icon at top-left to hide/collapse this sidebar for a clean screen view.")
+    st.success("💡 **Tip:** फ़ाइल अपलोड करने के बाद ऊपर दिए गए **`<<` Arrow** बटन पर क्लिक करके साइडबार को बंद कर सकते हैं ताकि डैशबोर्ड फुल स्क्रीन दिखे!")
 
 # Helper Function to Format Weight smartly into Ton or KG
 def format_weight(kg_val):
@@ -248,7 +259,7 @@ if uploaded_file is not None:
 
 # Prompt user to upload file if not loaded yet
 if st.session_state["processed_df"] is None:
-    st.warning("👈 Please open the Left Sidebar (click the arrow on top-left) and upload your Operations Data Sheet (.xlsx) to view the dashboard.")
+    st.info("👈 कृपया बाईं ओर (Left Panel) दिए गए **Upload Panel** में अपनी Excel फ़ाइल अपलोड करें।")
 
 # Render Dashboard if Data exists in Session State
 if st.session_state["processed_df"] is not None:
@@ -259,7 +270,7 @@ if st.session_state["processed_df"] is not None:
     col_gatein_date, col_cn_date, col_reason = cols["gatein"], cols["cndate"], cols["reason"]
     col_mode, col_cee, col_pin = cols["mode"], cols["cee"], cols["pin"]
 
-    # --- TOP KPI METRICS ROW (MOVED TO TOP) ---
+    # --- TOP KPI METRICS ROW ---
     total_cn = len(df_base)
     total_pkg = df_base['CN_PKG_NUM'].sum()
     total_wt = df_base['CN_WT_NUM'].sum()
@@ -275,7 +286,7 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- MULTI-SELECT DELIVERY HUBS FILTER (MOVED BELOW KPIs) ---
+    # --- MULTI-SELECT DELIVERY HUBS FILTER (BELOW KPIs) ---
     if col_todist:
         all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
         selected_hubs = st.multiselect(
