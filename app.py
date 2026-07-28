@@ -92,7 +92,7 @@ st.markdown("""
         padding: 10px;
     }
 
-    /* Tabs Adjustment to align with right-side tables */
+    /* Tabs Adjustment */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
     }
@@ -158,6 +158,7 @@ if uploaded_file is not None:
         # Smart Column Mapping
         col_cn = find_column(['CN_CN_NO', 'CN_NO', 'WAYBILL', 'LR_NO', 'CN'], df_raw)
         col_pkg = find_column(['CN_PKG', 'PKG', 'BOX', 'QTY', 'PIECES'], df_raw)
+        col_wt = find_column(['ACT_WT', 'CHG_WT', 'WT', 'WEIGHT', 'TOTAL_WEIGHT', 'KGS'], df_raw)
         col_todist = find_column(['TODIST', 'DESTINATION', 'LOCATION', 'HUB'], df_raw)
         col_gatein_date = find_column(['CHLN_GATE_IN_DATE', 'GATE_IN_DATE', 'GATE_IN', 'GATEIN'], df_raw)
         col_cn_date = find_column(['CN_DATE', 'BOOKING_DATE'], df_raw)
@@ -209,41 +210,63 @@ if uploaded_file is not None:
 
         df['Aging_Bucket'] = df['CALCULATED_HOURS'].apply(assign_hour_bucket)
 
-        # Clean & Calculate CN_PKG
+        # Clean & Calculate CN_PKG & WEIGHT
         if col_pkg:
             df['CN_PKG_NUM'] = pd.to_numeric(df[col_pkg], errors='coerce').fillna(0).astype(int)
         else:
             df['CN_PKG_NUM'] = 0
 
+        if col_wt:
+            df['CN_WT_NUM'] = pd.to_numeric(df[col_wt], errors='coerce').fillna(0).round(1)
+        else:
+            df['CN_WT_NUM'] = 0.0
+
         # Save to Session State
         st.session_state["processed_df"] = df
         st.session_state["cols"] = {
-            "cn": col_cn, "pkg": col_pkg, "todist": col_todist,
+            "cn": col_cn, "pkg": col_pkg, "wt": col_wt, "todist": col_todist,
             "gatein": col_gatein_date, "cndate": col_cn_date, "reason": col_reason,
             "mode": col_mode, "cee": col_cee, "pin": col_pin
         }
 
 # Render Dashboard if Data exists in Session State
 if st.session_state["processed_df"] is not None:
-    df = st.session_state["processed_df"]
+    df_base = st.session_state["processed_df"]
     cols = st.session_state["cols"]
 
-    col_cn, col_pkg, col_todist = cols["cn"], cols["pkg"], cols["todist"]
+    col_cn, col_pkg, col_wt, col_todist = cols["cn"], cols["pkg"], cols["wt"], cols["todist"]
     col_gatein_date, col_cn_date, col_reason = cols["gatein"], cols["cndate"], cols["reason"]
     col_mode, col_cee, col_pin = cols["mode"], cols["cee"], cols["pin"]
 
+    # --- MULTI-SELECT DELIVERY HUBS FILTER ---
+    st.markdown("<br>", unsafe_allow_html=True)
+    if col_todist:
+        all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
+        selected_hubs = st.multiselect(
+            "🎯 **Filter Delivery Hubs (TODIST) - Leave blank to view all hubs:**",
+            options=all_hubs,
+            default=[],
+            help="Select specific hubs to filter the entire dashboard data."
+        )
+        if selected_hubs:
+            df = df_base[df_base[col_todist].isin(selected_hubs)].copy()
+        else:
+            df = df_base.copy()
+    else:
+        df = df_base.copy()
+
     total_cn = len(df)
     total_pkg = df['CN_PKG_NUM'].sum()
+    total_wt = df['CN_WT_NUM'].sum()
     avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
 
     # KPI Display Row
-    st.markdown("<br>", unsafe_allow_html=True)
     c1, c2, c3, c4, c5 = st.columns(5)
     
     c1.metric("Total Unique CNs", f"{total_cn:,}")
     c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
-    c3.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
-    c4.metric("⚠️ 72-96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='72 Hour Above']):,}")
+    c3.metric("⚖️ Total Weight", f"{total_wt:,.1f} KG" if col_wt else f"{int(total_pkg):,} Pkg")
+    c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
     c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -312,41 +335,57 @@ if st.session_state["processed_df"] is not None:
                 missing_df['DATE_OBJ'] = pd.to_datetime(missing_df[gatein_col_to_use], dayfirst=True, errors='coerce')
                 missing_df['GATE_IN_DAY'] = missing_df['DATE_OBJ'].dt.strftime('%d-%b-%Y')
                 
-                tab_m1, tab_m2 = st.tabs(["📅 All Dates Summary", "🎯 Select Specific Date"])
+                tab_m1, tab_m2, tab_m3 = st.tabs(["📅 All Dates", "🎯 Specific Date", "🏢 Destination Wise NTC"])
                 
+                # Tab 1: Date Summary
                 with tab_m1:
                     missing_summary = missing_df.groupby(['DATE_OBJ', 'GATE_IN_DAY']).agg(
                         Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
-                        Pending_Packages_CN_PKG=('CN_PKG_NUM', 'sum')
+                        Pending_Packages=('CN_PKG_NUM', 'sum'),
+                        Total_Weight=('CN_WT_NUM', 'sum')
                     ).reset_index().sort_values(by='DATE_OBJ', ascending=False)
                     
-                    missing_summary_display = missing_summary[['GATE_IN_DAY', 'Pending_CN_Count', 'Pending_Packages_CN_PKG']]
-                    missing_summary_display.columns = ['Gate In Date', 'Blank Reason CNs', 'Total Pending PKG']
+                    missing_summary_display = missing_summary[['GATE_IN_DAY', 'Pending_CN_Count', 'Pending_Packages', 'Total_Weight']]
+                    missing_summary_display.columns = ['Gate In Date', 'Blank Reason CNs', 'Pending PKG', 'Weight (KG)'] if col_wt else ['Gate In Date', 'Blank Reason CNs', 'Pending PKG']
                     st.dataframe(missing_summary_display, use_container_width=True, hide_index=True, height=225)
                 
+                # Tab 2: Date + CN List
                 with tab_m2:
                     if col_todist:
-                        # Fetch Dates sorted latest first
                         unique_dates = missing_df.sort_values(by='DATE_OBJ', ascending=False)['GATE_IN_DAY'].dropna().unique().tolist()
                         
                         if unique_dates:
-                            # Radio button for Date Selection (Click to View)
                             selected_date = st.radio("🗓️ Click Date to View Details:", options=unique_dates, key="radio_date_picker")
-                            
                             filtered_missing = missing_df[missing_df['GATE_IN_DAY'] == selected_date].copy()
 
-                            # Helper function to join CN numbers as a comma-separated string
                             def join_cns(series):
                                 return ", ".join(series.astype(str).unique())
 
                             todist_missing_summary = filtered_missing.groupby(col_todist).agg(
                                 Blank_Reason_CNs=(col_cn if col_cn else col_todist, 'count'),
                                 Pending_Packages=('CN_PKG_NUM', 'sum'),
+                                Total_Weight=('CN_WT_NUM', 'sum'),
                                 Pending_CN_List=(col_cn if col_cn else col_todist, join_cns)
                             ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
                             
-                            todist_missing_summary.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Pending CN Numbers']
+                            cols_rename = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Weight (KG)', 'Pending CN Numbers'] if col_wt else ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Pending CN Numbers']
+                            todist_missing_summary.columns = cols_rename
                             st.dataframe(todist_missing_summary, use_container_width=True, hide_index=True, height=160)
+                    else:
+                        st.info("TODIST column missing in dataset.")
+
+                # Tab 3: Destination Wise NTC Summary
+                with tab_m3:
+                    if col_todist:
+                        ntc_dest_summary = missing_df.groupby(col_todist).agg(
+                            Blank_Reason_CNs=(col_cn if col_cn else col_todist, 'count'),
+                            Pending_Packages=('CN_PKG_NUM', 'sum'),
+                            Total_Weight=('CN_WT_NUM', 'sum')
+                        ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
+
+                        cols_ntc_rename = ['Destination Hub (TODIST)', 'Blank Reason CNs', 'Pending PKG', 'Weight (KG)'] if col_wt else ['Destination Hub (TODIST)', 'Blank Reason CNs', 'Pending PKG']
+                        ntc_dest_summary.columns = cols_ntc_rename
+                        st.dataframe(ntc_dest_summary, use_container_width=True, hide_index=True, height=225)
                     else:
                         st.info("TODIST column missing in dataset.")
             else:
@@ -359,10 +398,12 @@ if st.session_state["processed_df"] is not None:
         if col_todist:
             todist_summary = df.groupby(col_todist).agg(
                 Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
-                Pending_CN_PKG=('CN_PKG_NUM', 'sum')
+                Pending_CN_PKG=('CN_PKG_NUM', 'sum'),
+                Total_Weight=('CN_WT_NUM', 'sum')
             ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
             
-            todist_summary.columns = ['Destination Hub (TODIST)', 'Pending CN Count', 'Total Pending PKG']
+            cols_load_rename = ['Destination Hub (TODIST)', 'Pending CN Count', 'Total Pending PKG', 'Total Weight (KG)'] if col_wt else ['Destination Hub (TODIST)', 'Pending CN Count', 'Total Pending PKG']
+            todist_summary.columns = cols_load_rename
             st.dataframe(todist_summary, use_container_width=True, hide_index=True, height=280)
         else:
             st.info("TODIST column not found in uploaded file.")
@@ -377,10 +418,12 @@ if st.session_state["processed_df"] is not None:
         if col_pin:
             pin_summary = df.groupby(col_pin).agg(
                 Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
-                Pending_CN_PKG=('CN_PKG_NUM', 'sum')
+                Pending_CN_PKG=('CN_PKG_NUM', 'sum'),
+                Total_Weight=('CN_WT_NUM', 'sum')
             ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
             
-            pin_summary.columns = ['Pincode (CEE_PINCODE)', 'Pending CN Count', 'Pending CN_PKG (Boxes)']
+            cols_pin_rename = ['Pincode (CEE_PINCODE)', 'Pending CN Count', 'Pending PKG', 'Weight (KG)'] if col_wt else ['Pincode (CEE_PINCODE)', 'Pending CN Count', 'Pending PKG']
+            pin_summary.columns = cols_pin_rename
             
             t_pin1, t_pin2 = st.tabs(["📍 Top Pending Pincodes", "📌 Lowest Pending Pincodes"])
             with t_pin1:
@@ -393,10 +436,12 @@ if st.session_state["processed_df"] is not None:
         if col_cee:
             cee_summary = df.groupby(col_cee).agg(
                 Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
-                Pending_CN_PKG=('CN_PKG_NUM', 'sum')
+                Pending_CN_PKG=('CN_PKG_NUM', 'sum'),
+                Total_Weight=('CN_WT_NUM', 'sum')
             ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
             
-            cee_summary.columns = ['Consignee Name (CEE)', 'Pending CN Count', 'Pending CN_PKG (Boxes)']
+            cols_cee_rename = ['Consignee Name (CEE)', 'Pending CN Count', 'Pending PKG', 'Weight (KG)'] if col_wt else ['Consignee Name (CEE)', 'Pending CN Count', 'Pending PKG']
+            cee_summary.columns = cols_cee_rename
             
             t_cee1, t_cee2 = st.tabs(["🔥 Top Pending Clients", "📉 Lowest Pending Clients"])
             with t_cee1:
@@ -408,7 +453,7 @@ if st.session_state["processed_df"] is not None:
 
     # Clean Filtered Operations Table
     st.markdown("<div class='section-head'>📋 Clean Unique Operations Dataset</div>", unsafe_allow_html=True)
-    show_cols = [c for c in [col_cn, col_todist, col_gatein_date, col_cn_date, col_mode, col_cee, col_pin, col_pkg, col_reason] if c]
+    show_cols = [c for c in [col_cn, col_todist, col_gatein_date, col_cn_date, col_mode, col_cee, col_pin, col_pkg, col_wt, col_reason] if c]
     
     display_df = df[show_cols + ['CALCULATED_DAYS', 'Aging_Bucket']].sort_values(by='CALCULATED_DAYS', ascending=False)
     st.dataframe(display_df, use_container_width=True, hide_index=True)
