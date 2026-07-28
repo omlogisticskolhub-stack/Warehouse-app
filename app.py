@@ -247,37 +247,41 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- STEP 2: MULTI-SELECT DELIVERY HUBS FILTER (KPIs SE PEHLE) ---
-    if col_todist:
-        all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
-        selected_hubs = st.multiselect(
-            "🎯 **Filter Delivery Hubs (TODIST) - Leave blank to view all hubs:**",
-            options=all_hubs,
-            default=[],
-            help="Select specific hubs to filter the entire dashboard data."
-        )
-        if selected_hubs:
-            df = df_base[df_base[col_todist].isin(selected_hubs)].copy()
+    # Placeholders banाए ताकि KPI कार्ड्स ऊपर दिखें और फिल्टर नीचे आने पर भी KPI अपडेट हो जाएं
+    kpi_placeholder = st.container()
+    filter_placeholder = st.container()
+
+    # --- STEP 2: MULTI-SELECT FILTER (नीचे प्लेसहोल्डर में) ---
+    with filter_placeholder:
+        if col_todist:
+            all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
+            selected_hubs = st.multiselect(
+                "🎯 **Filter Delivery Hubs (TODIST) - Leave blank to view all hubs:**",
+                options=all_hubs,
+                default=[],
+                help="Select specific hubs to filter the entire dashboard data."
+            )
+            if selected_hubs:
+                df = df_base[df_base[col_todist].isin(selected_hubs)].copy()
+            else:
+                df = df_base.copy()
         else:
             df = df_base.copy()
-    else:
-        df = df_base.copy()
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    # --- STEP 3: TOP KPI METRICS ROW (ऊपर प्लेसहोल्डर में दिखेगा) ---
+    with kpi_placeholder:
+        total_cn = len(df)
+        total_pkg = df['CN_PKG_NUM'].sum()
+        total_wt = df['CN_WT_NUM'].sum()
+        avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
 
-    # --- STEP 3: TOP KPI METRICS ROW (FILTERED DATA SE CALCULATE HOGA) ---
-    total_cn = len(df)
-    total_pkg = df['CN_PKG_NUM'].sum()
-    total_wt = df['CN_WT_NUM'].sum()
-    avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-    
-    c1.metric("Total Unique CNs", f"{total_cn:,}")
-    c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
-    c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
-    c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
-    c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
+        c1, c2, c3, c4, c5 = st.columns(5)
+        
+        c1.metric("Total Unique CNs", f"{total_cn:,}")
+        c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
+        c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
+        c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
+        c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
