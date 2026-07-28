@@ -145,7 +145,7 @@ def format_weight(kg_val):
 if "processed_df" not in st.session_state:
     st.session_state["processed_df"] = None
 
-# --- STEP 1: FILE UPLOADER (DIRECTLY ON TOP - NO HEADERS) ---
+# --- STEP 1: FILE UPLOADER (TOP) ---
 uploaded_file = st.file_uploader("Upload Operations Excel Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
 
 # Process File if Uploaded
@@ -247,23 +247,7 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- STEP 2: TOP KPI METRICS ROW ---
-    total_cn = len(df_base)
-    total_pkg = df_base['CN_PKG_NUM'].sum()
-    total_wt = df_base['CN_WT_NUM'].sum()
-    avg_days = round(df_base['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-    
-    c1.metric("Total Unique CNs", f"{total_cn:,}")
-    c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
-    c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
-    c4.metric("🚨 >96 Hours Pendency", f"{len(df_base[df_base['Aging_Bucket']=='96 Hour Above']):,}")
-    c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # --- STEP 3: MULTI-SELECT DELIVERY HUBS FILTER ---
+    # --- STEP 2: MULTI-SELECT DELIVERY HUBS FILTER (KPIs SE PEHLE) ---
     if col_todist:
         all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
         selected_hubs = st.multiselect(
@@ -278,6 +262,22 @@ if st.session_state["processed_df"] is not None:
             df = df_base.copy()
     else:
         df = df_base.copy()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- STEP 3: TOP KPI METRICS ROW (FILTERED DATA SE CALCULATE HOGA) ---
+    total_cn = len(df)
+    total_pkg = df['CN_PKG_NUM'].sum()
+    total_wt = df['CN_WT_NUM'].sum()
+    avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    
+    c1.metric("Total Unique CNs", f"{total_cn:,}")
+    c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
+    c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
+    c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
+    c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
