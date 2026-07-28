@@ -145,8 +145,7 @@ def format_weight(kg_val):
 if "processed_df" not in st.session_state:
     st.session_state["processed_df"] = None
 
-# --- STEP 1: FILE UPLOADER (TOP) ---
-st.markdown("<div class='section-head'>📁 Data Import</div>", unsafe_allow_html=True)
+# --- STEP 1: FILE UPLOADER (DIRECTLY ON TOP - NO HEADERS) ---
 uploaded_file = st.file_uploader("Upload Operations Excel Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
 
 # Process File if Uploaded
@@ -248,7 +247,7 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- STEP 2: TOP KPI METRICS ROW (FILE UPLOAD KE NICHE) ---
+    # --- STEP 2: TOP KPI METRICS ROW ---
     total_cn = len(df_base)
     total_pkg = df_base['CN_PKG_NUM'].sum()
     total_wt = df_base['CN_WT_NUM'].sum()
@@ -264,7 +263,7 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- STEP 3: MULTI-SELECT DELIVERY HUBS FILTER (KPIS KE NICHE) ---
+    # --- STEP 3: MULTI-SELECT DELIVERY HUBS FILTER ---
     if col_todist:
         all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
         selected_hubs = st.multiselect(
