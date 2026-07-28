@@ -137,6 +137,13 @@ st.markdown("""
 # File Uploader
 uploaded_file = st.file_uploader("📂 Choose / Upload Operations Data Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
 
+# Helper Function to Format Weight smartly into Ton or KG
+def format_weight(kg_val):
+    if kg_val >= 1000:
+        return f"{kg_val / 1000:.2f} Ton"
+    else:
+        return f"{kg_val:.1f} KG"
+
 # Session State Initialization
 if "processed_df" not in st.session_state:
     st.session_state["processed_df"] = None
@@ -265,7 +272,7 @@ if st.session_state["processed_df"] is not None:
     
     c1.metric("Total Unique CNs", f"{total_cn:,}")
     c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
-    c3.metric("⚖️ Total Weight", f"{total_wt:,.1f} KG" if col_wt else f"{int(total_pkg):,} Pkg")
+    c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
     c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
     c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
 
@@ -335,7 +342,7 @@ if st.session_state["processed_df"] is not None:
                 missing_df['DATE_OBJ'] = pd.to_datetime(missing_df[gatein_col_to_use], dayfirst=True, errors='coerce')
                 missing_df['GATE_IN_DAY'] = missing_df['DATE_OBJ'].dt.strftime('%d-%b-%Y')
                 
-                tab_m1, tab_m2, tab_m3 = st.tabs(["📅 All Dates", "🎯 Specific Date", "🏢 Destination Wise NTC"])
+                tab_m1, tab_m2, tab_m3 = st.tabs(["📅 All Dates", "🎯 Specific Date", "🏢 To District Wise"])
                 
                 # Tab 1: Date Summary
                 with tab_m1:
@@ -345,11 +352,18 @@ if st.session_state["processed_df"] is not None:
                         Total_Weight=('CN_WT_NUM', 'sum')
                     ).reset_index().sort_values(by='DATE_OBJ', ascending=False)
                     
-                    missing_summary_display = missing_summary[['GATE_IN_DAY', 'Pending_CN_Count', 'Pending_Packages', 'Total_Weight']]
-                    missing_summary_display.columns = ['Gate In Date', 'Blank Reason CNs', 'Pending PKG', 'Weight (KG)'] if col_wt else ['Gate In Date', 'Blank Reason CNs', 'Pending PKG']
+                    missing_summary['Weight_Formatted'] = missing_summary['Total_Weight'].apply(format_weight)
+                    
+                    if col_wt:
+                        missing_summary_display = missing_summary[['GATE_IN_DAY', 'Pending_CN_Count', 'Pending_Packages', 'Weight_Formatted']]
+                        missing_summary_display.columns = ['Gate In Date', 'Blank Reason CNs', 'Pending PKG', 'Weight Load']
+                    else:
+                        missing_summary_display = missing_summary[['GATE_IN_DAY', 'Pending_CN_Count', 'Pending_Packages']]
+                        missing_summary_display.columns = ['Gate In Date', 'Blank Reason CNs', 'Pending PKG']
+                        
                     st.dataframe(missing_summary_display, use_container_width=True, hide_index=True, height=225)
                 
-                # Tab 2: Date + CN List
+                # Tab 2: Specific Date + CN List
                 with tab_m2:
                     if col_todist:
                         unique_dates = missing_df.sort_values(by='DATE_OBJ', ascending=False)['GATE_IN_DAY'].dropna().unique().tolist()
@@ -368,13 +382,20 @@ if st.session_state["processed_df"] is not None:
                                 Pending_CN_List=(col_cn if col_cn else col_todist, join_cns)
                             ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
                             
-                            cols_rename = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Weight (KG)', 'Pending CN Numbers'] if col_wt else ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Pending CN Numbers']
-                            todist_missing_summary.columns = cols_rename
-                            st.dataframe(todist_missing_summary, use_container_width=True, hide_index=True, height=160)
+                            todist_missing_summary['Weight_Formatted'] = todist_missing_summary['Total_Weight'].apply(format_weight)
+                            
+                            if col_wt:
+                                display_td = todist_missing_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Weight_Formatted', 'Pending_CN_List']]
+                                display_td.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Weight Load', 'Pending CN Numbers']
+                            else:
+                                display_td = todist_missing_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Pending_CN_List']]
+                                display_td.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Pending CN Numbers']
+                                
+                            st.dataframe(display_td, use_container_width=True, hide_index=True, height=160)
                     else:
                         st.info("TODIST column missing in dataset.")
 
-                # Tab 3: Destination Wise NTC Summary
+                # Tab 3: To District Wise Summary
                 with tab_m3:
                     if col_todist:
                         ntc_dest_summary = missing_df.groupby(col_todist).agg(
@@ -383,9 +404,16 @@ if st.session_state["processed_df"] is not None:
                             Total_Weight=('CN_WT_NUM', 'sum')
                         ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
 
-                        cols_ntc_rename = ['Destination Hub (TODIST)', 'Blank Reason CNs', 'Pending PKG', 'Weight (KG)'] if col_wt else ['Destination Hub (TODIST)', 'Blank Reason CNs', 'Pending PKG']
-                        ntc_dest_summary.columns = cols_ntc_rename
-                        st.dataframe(ntc_dest_summary, use_container_width=True, hide_index=True, height=225)
+                        ntc_dest_summary['Weight_Formatted'] = ntc_dest_summary['Total_Weight'].apply(format_weight)
+
+                        if col_wt:
+                            display_ntc = ntc_dest_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Weight_Formatted']]
+                            display_ntc.columns = ['Destination Hub (TODIST)', 'Blank Reason CNs', 'Pending PKG', 'Weight Load']
+                        else:
+                            display_ntc = ntc_dest_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages']]
+                            display_ntc.columns = ['Destination Hub (TODIST)', 'Blank Reason CNs', 'Pending PKG']
+
+                        st.dataframe(display_ntc, use_container_width=True, hide_index=True, height=225)
                     else:
                         st.info("TODIST column missing in dataset.")
             else:
@@ -402,9 +430,16 @@ if st.session_state["processed_df"] is not None:
                 Total_Weight=('CN_WT_NUM', 'sum')
             ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
             
-            cols_load_rename = ['Destination Hub (TODIST)', 'Pending CN Count', 'Total Pending PKG', 'Total Weight (KG)'] if col_wt else ['Destination Hub (TODIST)', 'Pending CN Count', 'Total Pending PKG']
-            todist_summary.columns = cols_load_rename
-            st.dataframe(todist_summary, use_container_width=True, hide_index=True, height=280)
+            todist_summary['Weight_Formatted'] = todist_summary['Total_Weight'].apply(format_weight)
+            
+            if col_wt:
+                display_load = todist_summary[[col_todist, 'Pending_CN_Count', 'Pending_CN_PKG', 'Weight_Formatted']]
+                display_load.columns = ['Destination Hub (TODIST)', 'Pending CN Count', 'Total Pending PKG', 'Total Weight Load']
+            else:
+                display_load = todist_summary[[col_todist, 'Pending_CN_Count', 'Pending_CN_PKG']]
+                display_load.columns = ['Destination Hub (TODIST)', 'Pending CN Count', 'Total Pending PKG']
+
+            st.dataframe(display_load, use_container_width=True, hide_index=True, height=280)
         else:
             st.info("TODIST column not found in uploaded file.")
 
@@ -422,14 +457,20 @@ if st.session_state["processed_df"] is not None:
                 Total_Weight=('CN_WT_NUM', 'sum')
             ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
             
-            cols_pin_rename = ['Pincode (CEE_PINCODE)', 'Pending CN Count', 'Pending PKG', 'Weight (KG)'] if col_wt else ['Pincode (CEE_PINCODE)', 'Pending CN Count', 'Pending PKG']
-            pin_summary.columns = cols_pin_rename
+            pin_summary['Weight_Formatted'] = pin_summary['Total_Weight'].apply(format_weight)
+
+            if col_wt:
+                display_pin = pin_summary[[col_pin, 'Pending_CN_Count', 'Pending_CN_PKG', 'Weight_Formatted']]
+                display_pin.columns = ['Pincode (CEE_PINCODE)', 'Pending CN Count', 'Pending PKG', 'Weight Load']
+            else:
+                display_pin = pin_summary[[col_pin, 'Pending_CN_Count', 'Pending_CN_PKG']]
+                display_pin.columns = ['Pincode (CEE_PINCODE)', 'Pending CN Count', 'Pending PKG']
             
             t_pin1, t_pin2 = st.tabs(["📍 Top Pending Pincodes", "📌 Lowest Pending Pincodes"])
             with t_pin1:
-                st.dataframe(pin_summary.head(10), use_container_width=True, hide_index=True)
+                st.dataframe(display_pin.head(10), use_container_width=True, hide_index=True)
             with t_pin2:
-                st.dataframe(pin_summary.tail(10), use_container_width=True, hide_index=True)
+                st.dataframe(display_pin.tail(10), use_container_width=True, hide_index=True)
 
     with r2_col2:
         st.markdown("<div class='section-head'>🏢 Consignee Analysis (CEE)</div>", unsafe_allow_html=True)
@@ -440,14 +481,20 @@ if st.session_state["processed_df"] is not None:
                 Total_Weight=('CN_WT_NUM', 'sum')
             ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
             
-            cols_cee_rename = ['Consignee Name (CEE)', 'Pending CN Count', 'Pending PKG', 'Weight (KG)'] if col_wt else ['Consignee Name (CEE)', 'Pending CN Count', 'Pending PKG']
-            cee_summary.columns = cols_cee_rename
+            cee_summary['Weight_Formatted'] = cee_summary['Total_Weight'].apply(format_weight)
+
+            if col_wt:
+                display_cee = cee_summary[[col_cee, 'Pending_CN_Count', 'Pending_CN_PKG', 'Weight_Formatted']]
+                display_cee.columns = ['Consignee Name (CEE)', 'Pending CN Count', 'Pending PKG', 'Weight Load']
+            else:
+                display_cee = cee_summary[[col_cee, 'Pending_CN_Count', 'Pending_CN_PKG']]
+                display_cee.columns = ['Consignee Name (CEE)', 'Pending CN Count', 'Pending PKG']
             
             t_cee1, t_cee2 = st.tabs(["🔥 Top Pending Clients", "📉 Lowest Pending Clients"])
             with t_cee1:
-                st.dataframe(cee_summary.head(10), use_container_width=True, hide_index=True)
+                st.dataframe(display_cee.head(10), use_container_width=True, hide_index=True)
             with t_cee2:
-                st.dataframe(cee_summary.tail(10), use_container_width=True, hide_index=True)
+                st.dataframe(display_cee.tail(10), use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
