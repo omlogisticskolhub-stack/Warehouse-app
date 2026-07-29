@@ -6,7 +6,7 @@ from datetime import datetime
 # Page Configuration - Clean Dashboard
 st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide")
 
-# Complete Black & Bold Text Styling + Hide Streamlit Footer & Fullscreen
+# Complete Black & Bold Text Styling CSS
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
@@ -109,22 +109,18 @@ st.markdown("""
         gap: 12px;
     }
 
-    /* Hide Unwanted UI Overlays & Streamlit Branding Completely */
-    header { visibility: hidden !important; display: none !important; }
-    footer { visibility: hidden !important; display: none !important; }
-    footer * { visibility: hidden !important; display: none !important; }
-    #MainMenu { visibility: hidden !important; display: none !important; }
-    [data-testid="stHeader"] { visibility: hidden !important; display: none !important; }
+    /* Hide Unwanted UI Overlays */
+    header { visibility: hidden; display: none !important; }
+    footer { visibility: hidden; display: none !important; }
+    #MainMenu { visibility: hidden; display: none !important; }
+    [data-testid="stHeader"] { visibility: hidden; display: none !important; }
     [data-testid="stAppToolbar"] { display: none !important; }
     [data-testid="stToolbar"] { display: none !important; }
-    [data-testid="stStatusWidget"] { display: none !important; }
     .viewerBadge_container__1S-5D, .viewerBadge_link__1S-5D { display: none !important; }
     #stDecoration { display: none !important; }
     div[class*="viewerBadge"] { display: none !important; }
     div[class*="styles_viewerBadge"] { display: none !important; }
     [data-testid="manage-app-button"] { display: none !important; }
-    button[title="View fullscreen"] { display: none !important; }
-    a[href*="streamlit.io"] { display: none !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -251,10 +247,11 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # Placeholders banाए ताकि KPI कार्ड्स ऊपर दिखें और फिल्टर नीचे आने पर भी KPI अपडेट हो जाएं
     kpi_placeholder = st.container()
     filter_placeholder = st.container()
 
-    # --- STEP 2: MULTI-SELECT FILTER (नीचे) ---
+    # --- STEP 2: MULTI-SELECT FILTER (नीचे प्लेसहोल्डर में) ---
     with filter_placeholder:
         if col_todist:
             all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
@@ -271,7 +268,7 @@ if st.session_state["processed_df"] is not None:
         else:
             df = df_base.copy()
 
-    # --- STEP 3: TOP KPI METRICS ROW (ऊपर) ---
+    # --- STEP 3: TOP KPI METRICS ROW (ऊपर प्लेसहोल्डर में दिखेगा) ---
     with kpi_placeholder:
         total_cn = len(df)
         total_pkg = df['CN_PKG_NUM'].sum()
