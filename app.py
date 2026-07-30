@@ -208,22 +208,28 @@ if uploaded_file is not None:
 
         df = df_raw.copy()
 
+        # Remove Duplicates based on CN Number
         if col_cn:
             df = df.drop_duplicates(subset=[col_cn]).copy()
 
         today = pd.to_datetime(datetime.today().date())
 
-        gatein_col_to_use = col_gatein_date if col_gatein_date else col_cn_date
-        if gatein_col_to_use:
-            df['DATE_OBJ'] = pd.to_datetime(df[gatein_col_to_use], dayfirst=True, errors='coerce')
-            df['GATE_IN_DAY'] = df['DATE_OBJ'].dt.strftime('%d-%b-%Y')
-            df['CALCULATED_DAYS'] = (today - df['DATE_OBJ']).dt.days.fillna(0).apply(lambda x: max(0, int(x)))
-        elif col_days:
-            df['CALCULATED_DAYS'] = pd.to_numeric(df[col_days], errors='coerce').fillna(0).astype(int)
-            df['GATE_IN_DAY'] = "Unknown"
+        # =========================================================
+        # 🎯 GATE-IN DATE + FALLBACK (CN_DATE) LOGIC
+        # =========================================================
+        primary_date = pd.to_datetime(df[col_gatein_date], dayfirst=True, errors='coerce') if col_gatein_date else pd.Series(dtype='datetime64[ns]')
+        fallback_date = pd.to_datetime(df[col_cn_date], dayfirst=True, errors='coerce') if col_cn_date else pd.Series(dtype='datetime64[ns]')
+
+        # Gate-in Date ho to wo legi, blank/invalid (-) ho तो CN_DATE legi
+        df['DATE_OBJ'] = primary_date.fillna(fallback_date)
+        df['GATE_IN_DAY'] = df['DATE_OBJ'].dt.strftime('%d-%b-%Y').fillna("Date Missing")
+
+        if col_days:
+            df['CALCULATED_DAYS'] = pd.to_numeric(df[col_days], errors='coerce').fillna(
+                (today - df['DATE_OBJ']).dt.days.fillna(0)
+            ).astype(int)
         else:
-            df['CALCULATED_DAYS'] = 0
-            df['GATE_IN_DAY'] = "Unknown"
+            df['CALCULATED_DAYS'] = (today - df['DATE_OBJ']).dt.days.fillna(0).apply(lambda x: max(0, int(x)))
 
         df['CALCULATED_HOURS'] = df['CALCULATED_DAYS'] * 24
 
@@ -247,7 +253,7 @@ if uploaded_file is not None:
             df['CN_WT_NUM'] = 0.0
 
         if col_reason:
-            df['REASON_STATUS'] = df[col_reason].apply(lambda x: "Missing" if pd.isnull(x) or str(x).strip() == "" or str(x).upper() == "NAN" else "Filled")
+            df['REASON_STATUS'] = df[col_reason].apply(lambda x: "Missing" if pd.isnull(x) or str(x).strip() == "" or str(x).upper() in ["NAN", "-"] else "Filled")
 
         st.session_state["processed_df"] = df
         st.session_state["cols"] = {
@@ -314,12 +320,12 @@ if st.session_state["processed_df"] is not None:
     if selected_dates:
         df_filtered = df_filtered[df_filtered['GATE_IN_DAY'].isin(selected_dates)].copy()
     else:
-        df_filtered = df_filtered.iloc[0:0]  # If no date selected, show empty filtered view
+        df_filtered = df_filtered.iloc[0:0]
 
-    df = df_filtered.copy() # Final dataset for entire page below
+    df = df_filtered.copy()
 
     # =========================================================
-    # STEP 2: TOP 5 KPI CARDS (UPDATES ACCORDING TO FILTERS)
+    # STEP 2: TOP 5 KPI CARDS
     # =========================================================
     total_cn = len(df)
     total_pkg = df['CN_PKG_NUM'].sum() if total_cn > 0 else 0
@@ -397,7 +403,6 @@ if st.session_state["processed_df"] is not None:
             if len(missing_df) > 0:
                 tab_m1, tab_m2 = st.tabs(["📅 Dates Breakdown", "🏢 TODIST Wise Details"])
                 
-                # Tab 1: Date Breakdown (Fully Synced)
                 with tab_m1:
                     missing_summary = missing_df.groupby(['DATE_OBJ', 'GATE_IN_DAY']).agg(
                         Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
@@ -416,7 +421,6 @@ if st.session_state["processed_df"] is not None:
                         
                     st.dataframe(missing_summary_display, use_container_width=True, hide_index=True, height=250)
                 
-                # Tab 2: TODIST Wise Summary (Fully Synced)
                 with tab_m2:
                     if col_todist:
                         def join_cns(series):
