@@ -6,7 +6,50 @@ from datetime import datetime
 # Page Configuration - Clean Dashboard
 st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide")
 
-# Complete Black & Bold Text Styling + Hide Streamlit Branding Completely
+# ==========================================
+# 🔒 SIMPLE PASSWORD AUTHENTICATION SYSTEM
+# ==========================================
+DASHBOARD_PASSWORD = "Dhiraj@01072026"  # Updated Password
+
+def check_password():
+    """Returns `True` if the user enters the correct password."""
+    def password_entered():
+        if st.session_state["entered_password"] == DASHBOARD_PASSWORD:
+            st.session_state["password_correct"] = True
+            del st.session_state["entered_password"]  # Clear password from session
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        # Ask for password for the first time
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### 🚛 Floor Ops Analytics - Om Logistics")
+            st.text_input("🔒 Enter Dashboard Password to Access:", type="password", on_change=password_entered, key="entered_password")
+        return False
+    elif not st.session_state["password_correct"]:
+        # Show error on wrong password
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### 🚛 Floor Ops Analytics - Om Logistics")
+            st.text_input("🔒 Enter Dashboard Password to Access:", type="password", on_change=password_entered, key="entered_password")
+            st.error("❌ Incorrect Password! Please try again.")
+        return False
+    else:
+        # Correct password
+        return True
+
+# Stop execution if password is wrong
+if not check_password():
+    st.stop()
+
+# ==========================================
+# 🎨 DASHBOARD STYLING & LOGIC BELOW
+# ==========================================
+
+# Complete Black & Bold Text Styling + Hide All Streamlit Branding
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
@@ -109,7 +152,7 @@ st.markdown("""
         gap: 12px;
     }
 
-    /* HIDE STREAMLIT BRANDING, FOOTER & FULLSCREEN BUTTONS */
+    /* --- HIDE ALL STREAMLIT BRANDING & FOOTER ELEMENTS --- */
     #MainMenu { visibility: hidden !important; display: none !important; }
     header { visibility: hidden !important; display: none !important; }
     footer { visibility: hidden !important; display: none !important; }
@@ -127,6 +170,13 @@ st.markdown("""
     a[href*="streamlit.io"] { display: none !important; }
     </style>
 """, unsafe_allow_html=True)
+
+# Sidebar me Logout Button
+with st.sidebar:
+    st.markdown("### 🔑 Account Actions")
+    if st.button("🔒 Lock Dashboard / Logout"):
+        st.session_state["password_correct"] = False
+        st.rerun()
 
 # Top Navigation Header
 st.markdown("""
@@ -251,11 +301,11 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Placeholders - Top KPI First, Filter Second
+    # Placeholders for KPI and Filter ordering
     kpi_placeholder = st.container()
     filter_placeholder = st.container()
 
-    # --- STEP 2: MULTI-SELECT FILTER (नीचे रहेगा) ---
+    # --- STEP 2: MULTI-SELECT FILTER ---
     with filter_placeholder:
         if col_todist:
             all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
@@ -272,7 +322,7 @@ if st.session_state["processed_df"] is not None:
         else:
             df = df_base.copy()
 
-    # --- STEP 3: TOP KPI METRICS ROW (सबसे ऊपर दिखेगा) ---
+    # --- STEP 3: TOP KPI METRICS ROW ---
     with kpi_placeholder:
         total_cn = len(df)
         total_pkg = df['CN_PKG_NUM'].sum()
