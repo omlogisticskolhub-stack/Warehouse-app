@@ -6,7 +6,45 @@ from datetime import datetime
 # Page Configuration - Clean Dashboard
 st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide")
 
-# Complete Black & Bold Text Styling + Hide Streamlit Branding Completely
+# ==========================================
+# 🔒 SIMPLE PASSWORD AUTHENTICATION SYSTEM
+# ==========================================
+DASHBOARD_PASSWORD = "Dhiraj@01072026"  # Password
+
+def check_password():
+    """Returns `True` if the user enters the correct password."""
+    def password_entered():
+        if st.session_state["entered_password"] == DASHBOARD_PASSWORD:
+            st.session_state["password_correct"] = True
+            del st.session_state["entered_password"]  # Clear password from session
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### 🚛 Floor Ops Analytics - Om Logistics")
+            st.text_input("🔒 Enter Dashboard Password to Access:", type="password", on_change=password_entered, key="entered_password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### 🚛 Floor Ops Analytics - Om Logistics")
+            st.text_input("🔒 Enter Dashboard Password to Access:", type="password", on_change=password_entered, key="entered_password")
+            st.error("❌ Incorrect Password! Please try again.")
+        return False
+    else:
+        return True
+
+if not check_password():
+    st.stop()
+
+# ==========================================
+# 🎨 DASHBOARD STYLING & LOGIC BELOW
+# ==========================================
+
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
@@ -20,7 +58,6 @@ st.markdown("""
         background-color: #f4f6f9;
     }
 
-    /* Top Navigation / Header Bar */
     .hub-header {
         background-color: #ffffff;
         padding: 16px 28px;
@@ -46,7 +83,6 @@ st.markdown("""
         font-weight: 700;
     }
 
-    /* Metric Cards - Bold Black Font */
     div[data-testid="stMetric"] {
         background: #ffffff !important;
         padding: 18px !important;
@@ -68,7 +104,6 @@ st.markdown("""
         letter-spacing: 0.5px;
     }
 
-    /* Section Subheaders */
     .section-head {
         font-size: 18px;
         font-weight: 900;
@@ -78,13 +113,11 @@ st.markdown("""
         border-bottom: 3px solid #d32f2f;
     }
 
-    /* Table text styling - All Bold Black */
     div[data-testid="stTable"], div[data-testid="stDataFrame"] {
         color: #000000 !important;
         font-weight: 700 !important;
     }
 
-    /* Clean Uploader Box */
     div[data-testid="stFileUploader"] {
         background-color: #ffffff;
         border: 2px dashed #94a3b8;
@@ -92,7 +125,6 @@ st.markdown("""
         padding: 10px;
     }
 
-    /* Tabs Adjustment */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
     }
@@ -103,13 +135,6 @@ st.markdown("""
         font-weight: 800 !important;
     }
 
-    /* Radio buttons styling for date picker */
-    div[role="radiogroup"] {
-        flex-direction: row !important;
-        gap: 12px;
-    }
-
-    /* HIDE STREAMLIT BRANDING, FOOTER & FULLSCREEN BUTTONS */
     #MainMenu { visibility: hidden !important; display: none !important; }
     header { visibility: hidden !important; display: none !important; }
     footer { visibility: hidden !important; display: none !important; }
@@ -128,7 +153,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Top Navigation Header
+with st.sidebar:
+    st.markdown("### 🔑 Account Actions")
+    if st.button("🔒 Lock Dashboard / Logout"):
+        st.session_state["password_correct"] = False
+        st.rerun()
+
 st.markdown("""
     <div class="hub-header">
         <div>
@@ -138,27 +168,23 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Helper Function to Format Weight smartly into Ton or KG
 def format_weight(kg_val):
     if kg_val >= 1000:
         return f"{kg_val / 1000:.2f} Ton"
     else:
         return f"{kg_val:.1f} KG"
 
-# Session State Initialization
 if "processed_df" not in st.session_state:
     st.session_state["processed_df"] = None
 
-# --- STEP 1: FILE UPLOADER (TOP) ---
+# --- STEP 1: FILE UPLOADER ---
 uploaded_file = st.file_uploader("Upload Operations Excel Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
 
-# Process File if Uploaded
 if uploaded_file is not None:
     with st.spinner("Processing Operations Data & Removing Duplicates..."):
         df_raw = pd.read_excel(uploaded_file)
         df_raw.columns = df_raw.columns.str.strip().str.upper()
 
-        # Helper Function to Smartly Find Columns
         def find_column(possible_names, df):
             for name in possible_names:
                 for col in df.columns:
@@ -166,7 +192,6 @@ if uploaded_file is not None:
                         return col
             return None
 
-        # Smart Column Mapping
         col_cn = find_column(['CN_CN_NO', 'CN_NO', 'WAYBILL', 'LR_NO', 'CN'], df_raw)
         col_pkg = find_column(['CN_PKG', 'PKG', 'BOX', 'QTY', 'PIECES'], df_raw)
         col_wt = find_column(['ACT_WT', 'CHG_WT', 'WT', 'WEIGHT', 'TOTAL_WEIGHT', 'KGS'], df_raw)
@@ -181,11 +206,9 @@ if uploaded_file is not None:
 
         df = df_raw.copy()
 
-        # Remove Duplicate CNs (Keeps First Entry)
         if col_cn:
             df = df.drop_duplicates(subset=[col_cn]).copy()
 
-        # Gate-In Date Aging Calculation
         today = pd.to_datetime(datetime.today().date())
 
         if col_gatein_date:
@@ -211,7 +234,6 @@ if uploaded_file is not None:
 
         df['CALCULATED_HOURS'] = df['CALCULATED_DAYS'] * 24
 
-        # Hours Categorization Buckets
         def assign_hour_bucket(hrs):
             if hrs >= 96: return "96 Hour Above"
             elif hrs >= 72: return "72 Hour Above"
@@ -221,7 +243,6 @@ if uploaded_file is not None:
 
         df['Aging_Bucket'] = df['CALCULATED_HOURS'].apply(assign_hour_bucket)
 
-        # Clean & Calculate CN_PKG & WEIGHT
         if col_pkg:
             df['CN_PKG_NUM'] = pd.to_numeric(df[col_pkg], errors='coerce').fillna(0).astype(int)
         else:
@@ -232,7 +253,6 @@ if uploaded_file is not None:
         else:
             df['CN_WT_NUM'] = 0.0
 
-        # Save to Session State
         st.session_state["processed_df"] = df
         st.session_state["cols"] = {
             "cn": col_cn, "pkg": col_pkg, "wt": col_wt, "todist": col_todist,
@@ -240,7 +260,6 @@ if uploaded_file is not None:
             "mode": col_mode, "cee": col_cee, "pin": col_pin
         }
 
-# Render Dashboard if Data exists in Session State
 if st.session_state["processed_df"] is not None:
     df_base = st.session_state["processed_df"]
     cols = st.session_state["cols"]
@@ -251,41 +270,34 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Placeholders - Top KPI First, Filter Second
-    kpi_placeholder = st.container()
-    filter_placeholder = st.container()
-
-    # --- STEP 2: MULTI-SELECT FILTER (नीचे रहेगा) ---
-    with filter_placeholder:
-        if col_todist:
-            all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
-            selected_hubs = st.multiselect(
-                "🎯 **Filter Delivery Hubs (TODIST) - Leave blank to view all hubs:**",
-                options=all_hubs,
-                default=[],
-                help="Select specific hubs to filter the entire dashboard data."
-            )
-            if selected_hubs:
-                df = df_base[df_base[col_todist].isin(selected_hubs)].copy()
-            else:
-                df = df_base.copy()
+    # --- TOP FILTER (TODIST / DISTRICT FILTER) ---
+    if col_todist:
+        all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
+        selected_hubs = st.multiselect(
+            "🎯 **Filter Delivery Hubs (TODIST) - Leave blank to view all hubs:**",
+            options=all_hubs,
+            default=[],
+            help="Select one or more hubs/districts (e.g. Dankuni) to filter ALL data from top to bottom."
+        )
+        if selected_hubs:
+            df = df_base[df_base[col_todist].isin(selected_hubs)].copy()
         else:
             df = df_base.copy()
+    else:
+        df = df_base.copy()
 
-    # --- STEP 3: TOP KPI METRICS ROW (सबसे ऊपर दिखेगा) ---
-    with kpi_placeholder:
-        total_cn = len(df)
-        total_pkg = df['CN_PKG_NUM'].sum()
-        total_wt = df['CN_WT_NUM'].sum()
-        avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
+    # --- TOP KPI METRICS ROW ---
+    total_cn = len(df)
+    total_pkg = df['CN_PKG_NUM'].sum()
+    total_wt = df['CN_WT_NUM'].sum()
+    avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
 
-        c1, c2, c3, c4, c5 = st.columns(5)
-        
-        c1.metric("Total Unique CNs", f"{total_cn:,}")
-        c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
-        c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
-        c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
-        c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Total Unique CNs", f"{total_cn:,}")
+    c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
+    c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
+    c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
+    c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -338,7 +350,7 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # SECTION 2: SIDE-BY-SIDE (MISSING REASONS & TODIST DESTINATION LOAD)
+    # SECTION 2: MISSING REASONS & TODIST DESTINATION LOAD
     s2_col1, s2_col2 = st.columns(2)
 
     with s2_col1:
@@ -353,7 +365,7 @@ if st.session_state["processed_df"] is not None:
                 missing_df['DATE_OBJ'] = pd.to_datetime(missing_df[gatein_col_to_use], dayfirst=True, errors='coerce')
                 missing_df['GATE_IN_DAY'] = missing_df['DATE_OBJ'].dt.strftime('%d-%b-%Y')
                 
-                tab_m1, tab_m2, tab_m3 = st.tabs(["📅 All Dates", "🎯 Specific Date", "🏢 TODIST Wise"])
+                tab_m1, tab_m2, tab_m3 = st.tabs(["📅 All Dates", "🎯 Specific Dates (Multiple Selection)", "🏢 TODIST Wise"])
                 
                 # Tab 1: Date Summary
                 with tab_m1:
@@ -374,35 +386,47 @@ if st.session_state["processed_df"] is not None:
                         
                     st.dataframe(missing_summary_display, use_container_width=True, hide_index=True, height=225)
                 
-                # Tab 2: Specific Date + CN List
+                # Tab 2: MULTIPLE DATES SELECTION (CHANGED FROM RADIO BUTTON)
                 with tab_m2:
                     if col_todist:
-                        unique_dates = missing_df.sort_values(by='DATE_OBJ', ascending=False)['GATE_IN_DAY'].dropna().unique().tolist()
+                        # Extract dates sorted latest first
+                        unique_dates_df = missing_df.dropna(subset=['DATE_OBJ']).sort_values(by='DATE_OBJ', ascending=False)
+                        unique_dates = unique_dates_df['GATE_IN_DAY'].unique().tolist()
                         
                         if unique_dates:
-                            selected_date = st.radio("🗓️ Click Date to View Details:", options=unique_dates, key="radio_date_picker")
-                            filtered_missing = missing_df[missing_df['GATE_IN_DAY'] == selected_date].copy()
-
-                            def join_cns(series):
-                                return ", ".join(series.astype(str).unique())
-
-                            todist_missing_summary = filtered_missing.groupby(col_todist).agg(
-                                Blank_Reason_CNs=(col_cn if col_cn else col_todist, 'count'),
-                                Pending_Packages=('CN_PKG_NUM', 'sum'),
-                                Total_Weight=('CN_WT_NUM', 'sum'),
-                                Pending_CN_List=(col_cn if col_cn else col_todist, join_cns)
-                            ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
+                            # Multiselect Box replacing Radio buttons for multiple date selection
+                            selected_dates = st.multiselect(
+                                "🗓️ **Select One or Multiple Dates (e.g., 30-Jul-2026, 29-Jul-2026):**",
+                                options=unique_dates,
+                                default=[unique_dates[0]],  # Defaults to latest date
+                                key="multi_date_picker"
+                            )
                             
-                            todist_missing_summary['Weight_Formatted'] = todist_missing_summary['Total_Weight'].apply(format_weight)
-                            
-                            if col_wt:
-                                display_td = todist_missing_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Weight_Formatted', 'Pending_CN_List']]
-                                display_td.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Weight Load', 'Pending CN Numbers']
-                            else:
-                                display_td = todist_missing_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Pending_CN_List']]
-                                display_td.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Pending CN Numbers']
+                            if selected_dates:
+                                filtered_missing = missing_df[missing_df['GATE_IN_DAY'].isin(selected_dates)].copy()
+
+                                def join_cns(series):
+                                    return ", ".join(series.astype(str).unique())
+
+                                todist_missing_summary = filtered_missing.groupby(col_todist).agg(
+                                    Blank_Reason_CNs=(col_cn if col_cn else col_todist, 'count'),
+                                    Pending_Packages=('CN_PKG_NUM', 'sum'),
+                                    Total_Weight=('CN_WT_NUM', 'sum'),
+                                    Pending_CN_List=(col_cn if col_cn else col_todist, join_cns)
+                                ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
                                 
-                            st.dataframe(display_td, use_container_width=True, hide_index=True, height=160)
+                                todist_missing_summary['Weight_Formatted'] = todist_missing_summary['Total_Weight'].apply(format_weight)
+                                
+                                if col_wt:
+                                    display_td = todist_missing_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Weight_Formatted', 'Pending_CN_List']]
+                                    display_td.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Weight Load', 'Pending CN Numbers']
+                                else:
+                                    display_td = todist_missing_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Pending_CN_List']]
+                                    display_td.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Pending CN Numbers']
+                                    
+                                st.dataframe(display_td, use_container_width=True, hide_index=True, height=170)
+                            else:
+                                st.info("Please select at least one date above to view details.")
                     else:
                         st.info("TODIST column missing in dataset.")
 
