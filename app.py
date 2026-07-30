@@ -42,7 +42,7 @@ if not check_password():
     st.stop()
 
 # ==========================================
-# 🎨 DASHBOARD STYLING & LOGIC BELOW
+# 🎨 DASHBOARD STYLING
 # ==========================================
 
 st.markdown("""
@@ -135,24 +135,6 @@ st.markdown("""
         font-weight: 800 !important;
     }
 
-    /* Checkbox Grid Styling */
-    div[data-testid="stCheckbox"] {
-        margin-bottom: 4px;
-    }
-    div[data-testid="stCheckbox"] label span {
-        font-size: 13px !important;
-        font-weight: 700 !important;
-        color: #000000 !important;
-    }
-
-    .filter-box {
-        background-color: #ffffff;
-        padding: 15px;
-        border-radius: 8px;
-        border: 1px solid #cbd5e1;
-        margin-bottom: 15px;
-    }
-
     #MainMenu { visibility: hidden !important; display: none !important; }
     header { visibility: hidden !important; display: none !important; }
     footer { visibility: hidden !important; display: none !important; }
@@ -195,7 +177,9 @@ def format_weight(kg_val):
 if "processed_df" not in st.session_state:
     st.session_state["processed_df"] = None
 
-# --- STEP 1: FILE UPLOADER ---
+# ==========================================
+# STEP 1: FILE UPLOADER (TOP MOST)
+# ==========================================
 uploaded_file = st.file_uploader("Upload Operations Excel Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
@@ -282,66 +266,73 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # Pre-fetch Options
+    all_hubs = sorted(df_raw_loaded[col_todist].dropna().unique().tolist()) if col_todist else []
+    unique_dates_df = df_raw_loaded.dropna(subset=['DATE_OBJ']).sort_values(by='DATE_OBJ', ascending=False)
+    all_dates = unique_dates_df['GATE_IN_DAY'].unique().tolist()
+
+    # Placeholders for Layout: Top KPIs -> Then Filters
+    kpi_container = st.container()
+    filter_container = st.container()
+
     # =========================================================
-    # 🎯 MASTER GLOBAL FILTERS (HUB & DATES)
+    # STEP 3: FILTERS (TODIST + DATES DROP-DOWN WITH SELECT ALL)
+    # =========================================================
+    with filter_container:
+        st.markdown("<br>", unsafe_allow_html=True)
+        f_col1, f_col2 = st.columns([1, 1])
+
+        with f_col1:
+            selected_hubs = st.multiselect(
+                "🏢 **TODIST Hub Filter (Leave blank for all):**",
+                options=all_hubs,
+                default=[],
+                help="Select one or multiple TODIST hubs to filter."
+            )
+
+        with f_col2:
+            select_all_dates = st.checkbox("✅ **Select / Deselect All Dates**", value=True)
+            default_date_selection = all_dates if select_all_dates else []
+
+            selected_dates = st.multiselect(
+                "🗓️ **Select One or Multiple Dates:**",
+                options=all_dates,
+                default=default_date_selection,
+                help="Click to open dates list. Choose specific dates or use Checkbox above for All."
+            )
+
+    # =========================================================
+    # ⚡ MASTER DYNAMIC FILTERING LOGIC
     # =========================================================
     df_filtered = df_raw_loaded.copy()
 
-    # 1. TODIST HUB FILTER
-    if col_todist:
-        all_hubs = sorted(df_raw_loaded[col_todist].dropna().unique().tolist())
-        selected_hubs = st.multiselect(
-            "🎯 **Filter Delivery Hubs (TODIST) - Leave blank to view all hubs:**",
-            options=all_hubs,
-            default=[],
-            help="Selecting hubs will filter TOP KPIs, Charts, Tables & Consignees instantly."
-        )
-        if selected_hubs:
-            df_filtered = df_filtered[df_filtered[col_todist].isin(selected_hubs)].copy()
+    # Filter Hubs
+    if selected_hubs:
+        df_filtered = df_filtered[df_filtered[col_todist].isin(selected_hubs)].copy()
 
-    # 2. DATE FILTER GRID (MULTIPLE SELECTABLE CHECKBOXES)
-    unique_dates_df = df_filtered.dropna(subset=['DATE_OBJ']).sort_values(by='DATE_OBJ', ascending=False)
-    unique_dates = unique_dates_df['GATE_IN_DAY'].unique().tolist()
+    # Filter Dates
+    if selected_dates:
+        df_filtered = df_filtered[df_filtered['GATE_IN_DAY'].isin(selected_dates)].copy()
+    else:
+        df_filtered = df_filtered.iloc[0:0]  # If no date selected, show empty filtered view
 
-    if unique_dates:
-        st.markdown("**🗓️ Select One or Multiple Dates:**")
-        
-        selected_dates = []
-        cols_per_row = 7
-        date_cols = st.columns(cols_per_row)
-        
-        for idx, d_str in enumerate(unique_dates):
-            col_idx = idx % cols_per_row
-            with date_cols[col_idx]:
-                # By default, all dates are selected so user sees full load initially
-                is_checked = st.checkbox(d_str, value=True, key=f"global_chk_{d_str}")
-                if is_checked:
-                    selected_dates.append(d_str)
-
-        if selected_dates:
-            df_filtered = df_filtered[df_filtered['GATE_IN_DAY'].isin(selected_dates)].copy()
-        else:
-            # If no date checked, filter everything out
-            df_filtered = df_filtered.iloc[0:0]
-
-    st.markdown("<br>", unsafe_allow_html=True)
+    df = df_filtered.copy() # Final dataset for entire page below
 
     # =========================================================
-    # 📊 DYNAMIC TOP 5 KPI CARDS (UPDATES ACCORDING TO FILTERS)
+    # STEP 2: TOP 5 KPI CARDS (UPDATES ACCORDING TO FILTERS)
     # =========================================================
-    df = df_filtered.copy() # Final filtered dataframe for all visualizations below
-
     total_cn = len(df)
     total_pkg = df['CN_PKG_NUM'].sum() if total_cn > 0 else 0
     total_wt = df['CN_WT_NUM'].sum() if total_cn > 0 else 0
     avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Total Unique CNs", f"{total_cn:,}")
-    c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
-    c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
-    c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
-    c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
+    with kpi_container:
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Total Unique CNs", f"{total_cn:,}")
+        c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
+        c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
+        c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
+        c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -406,7 +397,7 @@ if st.session_state["processed_df"] is not None:
             if len(missing_df) > 0:
                 tab_m1, tab_m2 = st.tabs(["📅 Dates Breakdown", "🏢 TODIST Wise Details"])
                 
-                # Tab 1: Date Summary
+                # Tab 1: Date Breakdown (Fully Synced)
                 with tab_m1:
                     missing_summary = missing_df.groupby(['DATE_OBJ', 'GATE_IN_DAY']).agg(
                         Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
@@ -425,7 +416,7 @@ if st.session_state["processed_df"] is not None:
                         
                     st.dataframe(missing_summary_display, use_container_width=True, hide_index=True, height=250)
                 
-                # Tab 2: TODIST Wise Summary
+                # Tab 2: TODIST Wise Summary (Fully Synced)
                 with tab_m2:
                     if col_todist:
                         def join_cns(series):
