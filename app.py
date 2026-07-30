@@ -135,7 +135,7 @@ st.markdown("""
         font-weight: 800 !important;
     }
 
-    /* Checkbox Styling Grid Adjustments */
+    /* Checkbox Grid Styling */
     div[data-testid="stCheckbox"] {
         margin-bottom: 4px;
     }
@@ -143,6 +143,14 @@ st.markdown("""
         font-size: 13px !important;
         font-weight: 700 !important;
         color: #000000 !important;
+    }
+
+    .filter-box {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        margin-bottom: 15px;
     }
 
     #MainMenu { visibility: hidden !important; display: none !important; }
@@ -221,26 +229,17 @@ if uploaded_file is not None:
 
         today = pd.to_datetime(datetime.today().date())
 
-        if col_gatein_date:
-            gate_in_parsed = pd.to_datetime(df[col_gatein_date], format='%d-%m-%Y', errors='coerce').fillna(
-                pd.to_datetime(df[col_gatein_date], dayfirst=True, errors='coerce')
-            )
-            df['CALCULATED_DAYS'] = (today - gate_in_parsed).dt.days
-            
-            if col_cn_date:
-                cn_parsed = pd.to_datetime(df[col_cn_date], dayfirst=True, errors='coerce')
-                df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].fillna((today - cn_parsed).dt.days)
-            if col_days:
-                df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].fillna(pd.to_numeric(df[col_days], errors='coerce'))
-                
-            df['CALCULATED_DAYS'] = df['CALCULATED_DAYS'].fillna(0).apply(lambda x: max(0, int(x)))
-        elif col_cn_date:
-            cn_parsed = pd.to_datetime(df[col_cn_date], dayfirst=True, errors='coerce')
-            df['CALCULATED_DAYS'] = (today - cn_parsed).dt.days.fillna(0).apply(lambda x: max(0, int(x)))
+        gatein_col_to_use = col_gatein_date if col_gatein_date else col_cn_date
+        if gatein_col_to_use:
+            df['DATE_OBJ'] = pd.to_datetime(df[gatein_col_to_use], dayfirst=True, errors='coerce')
+            df['GATE_IN_DAY'] = df['DATE_OBJ'].dt.strftime('%d-%b-%Y')
+            df['CALCULATED_DAYS'] = (today - df['DATE_OBJ']).dt.days.fillna(0).apply(lambda x: max(0, int(x)))
         elif col_days:
             df['CALCULATED_DAYS'] = pd.to_numeric(df[col_days], errors='coerce').fillna(0).astype(int)
+            df['GATE_IN_DAY'] = "Unknown"
         else:
             df['CALCULATED_DAYS'] = 0
+            df['GATE_IN_DAY'] = "Unknown"
 
         df['CALCULATED_HOURS'] = df['CALCULATED_DAYS'] * 24
 
@@ -263,6 +262,9 @@ if uploaded_file is not None:
         else:
             df['CN_WT_NUM'] = 0.0
 
+        if col_reason:
+            df['REASON_STATUS'] = df[col_reason].apply(lambda x: "Missing" if pd.isnull(x) or str(x).strip() == "" or str(x).upper() == "NAN" else "Filled")
+
         st.session_state["processed_df"] = df
         st.session_state["cols"] = {
             "cn": col_cn, "pkg": col_pkg, "wt": col_wt, "todist": col_todist,
@@ -271,7 +273,7 @@ if uploaded_file is not None:
         }
 
 if st.session_state["processed_df"] is not None:
-    df_base = st.session_state["processed_df"]
+    df_raw_loaded = st.session_state["processed_df"]
     cols = st.session_state["cols"]
 
     col_cn, col_pkg, col_wt, col_todist = cols["cn"], cols["pkg"], cols["wt"], cols["todist"]
@@ -280,36 +282,66 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- 1. TOP KPI METRICS ROW ---
-    total_cn = len(df_base)
-    total_pkg = df_base['CN_PKG_NUM'].sum()
-    total_wt = df_base['CN_WT_NUM'].sum()
-    avg_days = round(df_base['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
+    # =========================================================
+    # 🎯 MASTER GLOBAL FILTERS (HUB & DATES)
+    # =========================================================
+    df_filtered = df_raw_loaded.copy()
+
+    # 1. TODIST HUB FILTER
+    if col_todist:
+        all_hubs = sorted(df_raw_loaded[col_todist].dropna().unique().tolist())
+        selected_hubs = st.multiselect(
+            "🎯 **Filter Delivery Hubs (TODIST) - Leave blank to view all hubs:**",
+            options=all_hubs,
+            default=[],
+            help="Selecting hubs will filter TOP KPIs, Charts, Tables & Consignees instantly."
+        )
+        if selected_hubs:
+            df_filtered = df_filtered[df_filtered[col_todist].isin(selected_hubs)].copy()
+
+    # 2. DATE FILTER GRID (MULTIPLE SELECTABLE CHECKBOXES)
+    unique_dates_df = df_filtered.dropna(subset=['DATE_OBJ']).sort_values(by='DATE_OBJ', ascending=False)
+    unique_dates = unique_dates_df['GATE_IN_DAY'].unique().tolist()
+
+    if unique_dates:
+        st.markdown("**🗓️ Select One or Multiple Dates:**")
+        
+        selected_dates = []
+        cols_per_row = 7
+        date_cols = st.columns(cols_per_row)
+        
+        for idx, d_str in enumerate(unique_dates):
+            col_idx = idx % cols_per_row
+            with date_cols[col_idx]:
+                # By default, all dates are selected so user sees full load initially
+                is_checked = st.checkbox(d_str, value=True, key=f"global_chk_{d_str}")
+                if is_checked:
+                    selected_dates.append(d_str)
+
+        if selected_dates:
+            df_filtered = df_filtered[df_filtered['GATE_IN_DAY'].isin(selected_dates)].copy()
+        else:
+            # If no date checked, filter everything out
+            df_filtered = df_filtered.iloc[0:0]
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # =========================================================
+    # 📊 DYNAMIC TOP 5 KPI CARDS (UPDATES ACCORDING TO FILTERS)
+    # =========================================================
+    df = df_filtered.copy() # Final filtered dataframe for all visualizations below
+
+    total_cn = len(df)
+    total_pkg = df['CN_PKG_NUM'].sum() if total_cn > 0 else 0
+    total_wt = df['CN_WT_NUM'].sum() if total_cn > 0 else 0
+    avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
 
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Total Unique CNs", f"{total_cn:,}")
     c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
     c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
-    c4.metric("🚨 >96 Hours Pendency", f"{len(df_base[df_base['Aging_Bucket']=='96 Hour Above']):,}")
+    c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
     c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # --- 2. DISTRICT / TODIST FILTER (SET BELOW TOP 5 KPI CARDS) ---
-    if col_todist:
-        all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
-        selected_hubs = st.multiselect(
-            "🎯 **Filter Delivery Hubs (TODIST) - Leave blank to view all hubs:**",
-            options=all_hubs,
-            default=[],
-            help="Select hubs to filter all lower charts and summaries."
-        )
-        if selected_hubs:
-            df = df_base[df_base[col_todist].isin(selected_hubs)].copy()
-        else:
-            df = df_base.copy()
-    else:
-        df = df_base.copy()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -367,17 +399,12 @@ if st.session_state["processed_df"] is not None:
 
     with s2_col1:
         st.markdown("<div class='section-head'>📅 Missing UNDLVRD_REASON Tracking</div>", unsafe_allow_html=True)
-        gatein_col_to_use = col_gatein_date if col_gatein_date else col_cn_date
         
-        if gatein_col_to_use and col_reason:
-            df['REASON_STATUS'] = df[col_reason].apply(lambda x: "Missing" if pd.isnull(x) or str(x).strip() == "" or str(x).upper() == "NAN" else "Filled")
+        if col_reason:
             missing_df = df[df['REASON_STATUS'] == "Missing"].copy()
             
             if len(missing_df) > 0:
-                missing_df['DATE_OBJ'] = pd.to_datetime(missing_df[gatein_col_to_use], dayfirst=True, errors='coerce')
-                missing_df['GATE_IN_DAY'] = missing_df['DATE_OBJ'].dt.strftime('%d-%b-%Y')
-                
-                tab_m1, tab_m2, tab_m3 = st.tabs(["📅 All Dates", "🎯 Specific Date", "🏢 TODIST Wise"])
+                tab_m1, tab_m2 = st.tabs(["📅 Dates Breakdown", "🏢 TODIST Wise Details"])
                 
                 # Tab 1: Date Summary
                 with tab_m1:
@@ -396,85 +423,37 @@ if st.session_state["processed_df"] is not None:
                         missing_summary_display = missing_summary[['GATE_IN_DAY', 'Pending_CN_Count', 'Pending_Packages']]
                         missing_summary_display.columns = ['Gate In Date', 'Blank Reason CNs', 'Pending PKG']
                         
-                    st.dataframe(missing_summary_display, use_container_width=True, hide_index=True, height=225)
+                    st.dataframe(missing_summary_display, use_container_width=True, hide_index=True, height=250)
                 
-                # Tab 2: MULTI-CHECKBOX GRID LOOK (PREVIOUS LAYOUT WITH MULTI-SELECTABILITY)
+                # Tab 2: TODIST Wise Summary
                 with tab_m2:
                     if col_todist:
-                        unique_dates_df = missing_df.dropna(subset=['DATE_OBJ']).sort_values(by='DATE_OBJ', ascending=False)
-                        unique_dates = unique_dates_df['GATE_IN_DAY'].unique().tolist()
-                        
-                        if unique_dates:
-                            st.markdown("**🗓️ Select One or Multiple Dates:**")
-                            
-                            # Render Checkboxes in a 7-column grid layout (looks just like radio buttons)
-                            selected_dates = []
-                            cols_per_row = 7
-                            date_cols = st.columns(cols_per_row)
-                            
-                            for idx, d_str in enumerate(unique_dates):
-                                col_idx = idx % cols_per_row
-                                with date_cols[col_idx]:
-                                    # Default first date is checked
-                                    is_checked = st.checkbox(d_str, value=(idx == 0), key=f"chk_dt_{d_str}")
-                                    if is_checked:
-                                        selected_dates.append(d_str)
+                        def join_cns(series):
+                            return ", ".join(series.astype(str).unique())
 
-                            st.markdown("<br>", unsafe_allow_html=True)
-
-                            if selected_dates:
-                                filtered_missing = missing_df[missing_df['GATE_IN_DAY'].isin(selected_dates)].copy()
-
-                                def join_cns(series):
-                                    return ", ".join(series.astype(str).unique())
-
-                                todist_missing_summary = filtered_missing.groupby(col_todist).agg(
-                                    Blank_Reason_CNs=(col_cn if col_cn else col_todist, 'count'),
-                                    Pending_Packages=('CN_PKG_NUM', 'sum'),
-                                    Total_Weight=('CN_WT_NUM', 'sum'),
-                                    Pending_CN_List=(col_cn if col_cn else col_todist, join_cns)
-                                ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
-                                
-                                todist_missing_summary['Weight_Formatted'] = todist_missing_summary['Total_Weight'].apply(format_weight)
-                                
-                                if col_wt:
-                                    display_td = todist_missing_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Weight_Formatted', 'Pending_CN_List']]
-                                    display_td.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Weight Load', 'Pending CN Numbers']
-                                else:
-                                    display_td = todist_missing_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Pending_CN_List']]
-                                    display_td.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Pending CN Numbers']
-                                    
-                                st.dataframe(display_td, use_container_width=True, hide_index=True, height=170)
-                            else:
-                                st.info("Please check at least one date above to view details.")
-                    else:
-                        st.info("TODIST column missing in dataset.")
-
-                # Tab 3: TODIST Wise Summary
-                with tab_m3:
-                    if col_todist:
-                        ntc_dest_summary = missing_df.groupby(col_todist).agg(
+                        todist_missing_summary = missing_df.groupby(col_todist).agg(
                             Blank_Reason_CNs=(col_cn if col_cn else col_todist, 'count'),
                             Pending_Packages=('CN_PKG_NUM', 'sum'),
-                            Total_Weight=('CN_WT_NUM', 'sum')
+                            Total_Weight=('CN_WT_NUM', 'sum'),
+                            Pending_CN_List=(col_cn if col_cn else col_todist, join_cns)
                         ).reset_index().sort_values(by='Blank_Reason_CNs', ascending=False)
-
-                        ntc_dest_summary['Weight_Formatted'] = ntc_dest_summary['Total_Weight'].apply(format_weight)
-
+                        
+                        todist_missing_summary['Weight_Formatted'] = todist_missing_summary['Total_Weight'].apply(format_weight)
+                        
                         if col_wt:
-                            display_ntc = ntc_dest_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Weight_Formatted']]
-                            display_ntc.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Weight Load']
+                            display_td = todist_missing_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Weight_Formatted', 'Pending_CN_List']]
+                            display_td.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Weight Load', 'Pending CN Numbers']
                         else:
-                            display_ntc = ntc_dest_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages']]
-                            display_ntc.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG']
-
-                        st.dataframe(display_ntc, use_container_width=True, hide_index=True, height=225)
+                            display_td = todist_missing_summary[[col_todist, 'Blank_Reason_CNs', 'Pending_Packages', 'Pending_CN_List']]
+                            display_td.columns = ['TODIST Hub', 'Blank Reason CNs', 'Pending PKG', 'Pending CN Numbers']
+                            
+                        st.dataframe(display_td, use_container_width=True, hide_index=True, height=250)
                     else:
                         st.info("TODIST column missing in dataset.")
             else:
-                st.success("✅ UNDLVRD_REASON is filled for all Gate-In shipments!")
+                st.success("✅ UNDLVRD_REASON is filled for all selected Filtered shipments!")
         else:
-            st.info("Gate-In Date or UNDLVRD_REASON column not found.")
+            st.info("UNDLVRD_REASON column not found.")
 
     with s2_col2:
         st.markdown("<div class='section-head'>🎯 Total TODIST Load Summary</div>", unsafe_allow_html=True)
@@ -554,7 +533,7 @@ if st.session_state["processed_df"] is not None:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Clean Filtered Operations Table
-    st.markdown("<div class='section-head'>📋 Clean Unique Operations Dataset</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-head'>📋 Clean Unique Operations Dataset (Filtered)</div>", unsafe_allow_html=True)
     show_cols = [c for c in [col_cn, col_todist, col_gatein_date, col_cn_date, col_mode, col_cee, col_pin, col_pkg, col_wt, col_reason] if c]
     
     display_df = df[show_cols + ['CALCULATED_DAYS', 'Aging_Bucket']].sort_values(by='CALCULATED_DAYS', ascending=False)
@@ -562,4 +541,4 @@ if st.session_state["processed_df"] is not None:
 
     # Export CSV Button
     csv_data = display_df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download Filtered Unique Data (CSV)", data=csv_data, file_name="OmLogistics_Floor_Ops_Unique.csv", mime="text/csv")
+    st.download_button("📥 Download Filtered Unique Data (CSV)", data=csv_data, file_name="OmLogistics_Floor_Ops_Filtered.csv", mime="text/csv")
