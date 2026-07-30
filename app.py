@@ -135,6 +135,16 @@ st.markdown("""
         font-weight: 800 !important;
     }
 
+    /* Checkbox Styling Grid Adjustments */
+    div[data-testid="stCheckbox"] {
+        margin-bottom: 4px;
+    }
+    div[data-testid="stCheckbox"] label span {
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        color: #000000 !important;
+    }
+
     #MainMenu { visibility: hidden !important; display: none !important; }
     header { visibility: hidden !important; display: none !important; }
     footer { visibility: hidden !important; display: none !important; }
@@ -270,14 +280,29 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- TOP FILTER (TODIST / DISTRICT FILTER) ---
+    # --- 1. TOP KPI METRICS ROW ---
+    total_cn = len(df_base)
+    total_pkg = df_base['CN_PKG_NUM'].sum()
+    total_wt = df_base['CN_WT_NUM'].sum()
+    avg_days = round(df_base['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Total Unique CNs", f"{total_cn:,}")
+    c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
+    c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
+    c4.metric("🚨 >96 Hours Pendency", f"{len(df_base[df_base['Aging_Bucket']=='96 Hour Above']):,}")
+    c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- 2. DISTRICT / TODIST FILTER (SET BELOW TOP 5 KPI CARDS) ---
     if col_todist:
         all_hubs = sorted(df_base[col_todist].dropna().unique().tolist())
         selected_hubs = st.multiselect(
             "🎯 **Filter Delivery Hubs (TODIST) - Leave blank to view all hubs:**",
             options=all_hubs,
             default=[],
-            help="Select one or more hubs/districts (e.g. Dankuni) to filter ALL data from top to bottom."
+            help="Select hubs to filter all lower charts and summaries."
         )
         if selected_hubs:
             df = df_base[df_base[col_todist].isin(selected_hubs)].copy()
@@ -285,19 +310,6 @@ if st.session_state["processed_df"] is not None:
             df = df_base.copy()
     else:
         df = df_base.copy()
-
-    # --- TOP KPI METRICS ROW ---
-    total_cn = len(df)
-    total_pkg = df['CN_PKG_NUM'].sum()
-    total_wt = df['CN_WT_NUM'].sum()
-    avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Total Unique CNs", f"{total_cn:,}")
-    c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
-    c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
-    c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
-    c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -365,7 +377,7 @@ if st.session_state["processed_df"] is not None:
                 missing_df['DATE_OBJ'] = pd.to_datetime(missing_df[gatein_col_to_use], dayfirst=True, errors='coerce')
                 missing_df['GATE_IN_DAY'] = missing_df['DATE_OBJ'].dt.strftime('%d-%b-%Y')
                 
-                tab_m1, tab_m2, tab_m3 = st.tabs(["📅 All Dates", "🎯 Specific Dates (Multiple Selection)", "🏢 TODIST Wise"])
+                tab_m1, tab_m2, tab_m3 = st.tabs(["📅 All Dates", "🎯 Specific Date", "🏢 TODIST Wise"])
                 
                 # Tab 1: Date Summary
                 with tab_m1:
@@ -386,22 +398,30 @@ if st.session_state["processed_df"] is not None:
                         
                     st.dataframe(missing_summary_display, use_container_width=True, hide_index=True, height=225)
                 
-                # Tab 2: MULTIPLE DATES SELECTION (CHANGED FROM RADIO BUTTON)
+                # Tab 2: MULTI-CHECKBOX GRID LOOK (PREVIOUS LAYOUT WITH MULTI-SELECTABILITY)
                 with tab_m2:
                     if col_todist:
-                        # Extract dates sorted latest first
                         unique_dates_df = missing_df.dropna(subset=['DATE_OBJ']).sort_values(by='DATE_OBJ', ascending=False)
                         unique_dates = unique_dates_df['GATE_IN_DAY'].unique().tolist()
                         
                         if unique_dates:
-                            # Multiselect Box replacing Radio buttons for multiple date selection
-                            selected_dates = st.multiselect(
-                                "🗓️ **Select One or Multiple Dates (e.g., 30-Jul-2026, 29-Jul-2026):**",
-                                options=unique_dates,
-                                default=[unique_dates[0]],  # Defaults to latest date
-                                key="multi_date_picker"
-                            )
+                            st.markdown("**🗓️ Select One or Multiple Dates:**")
                             
+                            # Render Checkboxes in a 7-column grid layout (looks just like radio buttons)
+                            selected_dates = []
+                            cols_per_row = 7
+                            date_cols = st.columns(cols_per_row)
+                            
+                            for idx, d_str in enumerate(unique_dates):
+                                col_idx = idx % cols_per_row
+                                with date_cols[col_idx]:
+                                    # Default first date is checked
+                                    is_checked = st.checkbox(d_str, value=(idx == 0), key=f"chk_dt_{d_str}")
+                                    if is_checked:
+                                        selected_dates.append(d_str)
+
+                            st.markdown("<br>", unsafe_allow_html=True)
+
                             if selected_dates:
                                 filtered_missing = missing_df[missing_df['GATE_IN_DAY'].isin(selected_dates)].copy()
 
@@ -426,7 +446,7 @@ if st.session_state["processed_df"] is not None:
                                     
                                 st.dataframe(display_td, use_container_width=True, hide_index=True, height=170)
                             else:
-                                st.info("Please select at least one date above to view details.")
+                                st.info("Please check at least one date above to view details.")
                     else:
                         st.info("TODIST column missing in dataset.")
 
