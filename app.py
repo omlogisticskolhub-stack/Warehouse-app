@@ -16,7 +16,7 @@ def check_password():
     def password_entered():
         if st.session_state["entered_password"] == DASHBOARD_PASSWORD:
             st.session_state["password_correct"] = True
-            del st.session_state["entered_password"]  # Clear password from session
+            del st.session_state["entered_password"]
         else:
             st.session_state["password_correct"] = False
 
@@ -85,19 +85,19 @@ st.markdown("""
 
     div[data-testid="stMetric"] {
         background: #ffffff !important;
-        padding: 18px !important;
+        padding: 14px 16px !important;
         border-radius: 8px !important;
         border: 2px solid #cbd5e1 !important;
         box-shadow: 0 2px 5px rgba(0,0,0,0.05) !important;
         text-align: left;
     }
     div[data-testid="stMetricValue"] {
-        font-size: 32px !important;
+        font-size: 28px !important;
         color: #000000 !important;
         font-weight: 900 !important;
     }
     div[data-testid="stMetricLabel"] {
-        font-size: 13px !important;
+        font-size: 12px !important;
         color: #000000 !important;
         text-transform: uppercase;
         font-weight: 800 !important;
@@ -178,7 +178,7 @@ if "processed_df" not in st.session_state:
     st.session_state["processed_df"] = None
 
 # ==========================================
-# STEP 1: FILE UPLOADER (TOP MOST)
+# STEP 1: FILE UPLOADER
 # ==========================================
 uploaded_file = st.file_uploader("Upload Operations Excel Sheet (.xlsx, .xls)", type=["xlsx", "xls"])
 
@@ -208,19 +208,16 @@ if uploaded_file is not None:
 
         df = df_raw.copy()
 
-        # Remove Duplicates based on CN Number
+        # Deduplicate based on CN
         if col_cn:
             df = df.drop_duplicates(subset=[col_cn]).copy()
 
         today = pd.to_datetime(datetime.today().date())
 
-        # =========================================================
-        # 🎯 GATE-IN DATE + FALLBACK (CN_DATE) LOGIC
-        # =========================================================
+        # Gate-In Date / Fallback CN Date Logic
         primary_date = pd.to_datetime(df[col_gatein_date], dayfirst=True, errors='coerce') if col_gatein_date else pd.Series(dtype='datetime64[ns]')
         fallback_date = pd.to_datetime(df[col_cn_date], dayfirst=True, errors='coerce') if col_cn_date else pd.Series(dtype='datetime64[ns]')
 
-        # Gate-in Date ho to wo legi, blank/invalid (-) ho तो CN_DATE legi
         df['DATE_OBJ'] = primary_date.fillna(fallback_date)
         df['GATE_IN_DAY'] = df['DATE_OBJ'].dt.strftime('%d-%b-%Y').fillna("Date Missing")
 
@@ -253,7 +250,8 @@ if uploaded_file is not None:
             df['CN_WT_NUM'] = 0.0
 
         if col_reason:
-            df['REASON_STATUS'] = df[col_reason].apply(lambda x: "Missing" if pd.isnull(x) or str(x).strip() == "" or str(x).upper() in ["NAN", "-"] else "Filled")
+            df['REASON_CLEAN'] = df[col_reason].apply(lambda x: "Pending Reason" if pd.isnull(x) or str(x).strip() in ["", "-", "NAN", "NONE"] else str(x).strip())
+            df['REASON_STATUS'] = df['REASON_CLEAN'].apply(lambda x: "Missing" if x == "Pending Reason" else "Filled")
 
         st.session_state["processed_df"] = df
         st.session_state["cols"] = {
@@ -272,39 +270,53 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Pre-fetch Options
     all_hubs = sorted(df_raw_loaded[col_todist].dropna().unique().tolist()) if col_todist else []
     unique_dates_df = df_raw_loaded.dropna(subset=['DATE_OBJ']).sort_values(by='DATE_OBJ', ascending=False)
     all_dates = unique_dates_df['GATE_IN_DAY'].unique().tolist()
+    
+    all_specific_reasons = sorted(df_raw_loaded[df_raw_loaded['REASON_STATUS'] == "Filled"]['REASON_CLEAN'].unique().tolist()) if col_reason else []
 
-    # Placeholders for Layout: Top KPIs -> Then Filters
     kpi_container = st.container()
     filter_container = st.container()
 
     # =========================================================
-    # STEP 3: FILTERS (TODIST + DATES DROP-DOWN WITH SELECT ALL)
+    # STEP 3: MASTER FILTERS
     # =========================================================
     with filter_container:
         st.markdown("<br>", unsafe_allow_html=True)
-        f_col1, f_col2 = st.columns([1, 1])
+        f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
 
         with f_col1:
             selected_hubs = st.multiselect(
-                "🏢 **TODIST Hub Filter (Leave blank for all):**",
+                "🏢 **TODIST Hub Filter:**",
                 options=all_hubs,
                 default=[],
-                help="Select one or multiple TODIST hubs to filter."
+                help="Select TODIST hubs."
             )
 
         with f_col2:
-            select_all_dates = st.checkbox("✅ **Select / Deselect All Dates**", value=True)
+            select_all_dates = st.checkbox("✅ **Select All Dates**", value=True)
             default_date_selection = all_dates if select_all_dates else []
 
             selected_dates = st.multiselect(
-                "🗓️ **Select One or Multiple Dates:**",
+                "🗓️ **Select Dates:**",
                 options=all_dates,
-                default=default_date_selection,
-                help="Click to open dates list. Choose specific dates or use Checkbox above for All."
+                default=default_date_selection
+            )
+
+        with f_col3:
+            reason_filter = st.selectbox(
+                "⚡ **Reason Status Filter:**",
+                options=["All Status", "Pending Reason Only", "Updated Reason Only"],
+                index=0
+            )
+
+        with f_col4:
+            selected_specific_reasons = st.multiselect(
+                "⚠️ **Specific Reason Filter:**",
+                options=all_specific_reasons,
+                default=[],
+                help="Select specific updated delay reasons."
             )
 
     # =========================================================
@@ -312,33 +324,44 @@ if st.session_state["processed_df"] is not None:
     # =========================================================
     df_filtered = df_raw_loaded.copy()
 
-    # Filter Hubs
     if selected_hubs:
         df_filtered = df_filtered[df_filtered[col_todist].isin(selected_hubs)].copy()
 
-    # Filter Dates
     if selected_dates:
         df_filtered = df_filtered[df_filtered['GATE_IN_DAY'].isin(selected_dates)].copy()
     else:
         df_filtered = df_filtered.iloc[0:0]
 
+    if reason_filter == "Pending Reason Only":
+        df_filtered = df_filtered[df_filtered['REASON_STATUS'] == "Missing"].copy()
+    elif reason_filter == "Updated Reason Only":
+        df_filtered = df_filtered[df_filtered['REASON_STATUS'] == "Filled"].copy()
+
+    if selected_specific_reasons:
+        df_filtered = df_filtered[df_filtered['REASON_CLEAN'].isin(selected_specific_reasons)].copy()
+
     df = df_filtered.copy()
 
     # =========================================================
-    # STEP 2: TOP 5 KPI CARDS
+    # STEP 2: TOP KPI CARDS
     # =========================================================
     total_cn = len(df)
     total_pkg = df['CN_PKG_NUM'].sum() if total_cn > 0 else 0
     total_wt = df['CN_WT_NUM'].sum() if total_cn > 0 else 0
     avg_days = round(df['CALCULATED_DAYS'].mean(), 1) if total_cn > 0 else 0
+    
+    pending_reason_count = len(df[df['REASON_STATUS'] == "Missing"]) if col_reason else 0
+    updated_reason_count = len(df[df['REASON_STATUS'] == "Filled"]) if col_reason else 0
 
     with kpi_container:
-        c1, c2, c3, c4, c5 = st.columns(5)
+        c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
         c1.metric("Total Unique CNs", f"{total_cn:,}")
-        c2.metric("Total CN_PKG (Boxes)", f"{int(total_pkg):,}")
-        c3.metric("⚖️ Total Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
-        c4.metric("🚨 >96 Hours Pendency", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
-        c5.metric("Avg Gate-In Aging", f"{avg_days} Days")
+        c2.metric("Total PKG", f"{int(total_pkg):,}")
+        c3.metric("⚖️ Weight Load", format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg")
+        c4.metric("🚨 >96 Hours", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}")
+        c5.metric("Avg Aging", f"{avg_days} Days")
+        c6.metric("Pending Reason", f"{pending_reason_count:,}")
+        c7.metric("Reason Updated", f"{updated_reason_count:,}")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -371,23 +394,26 @@ if st.session_state["processed_df"] is not None:
         st.plotly_chart(fig_bucket, use_container_width=True)
 
     with r1_col2:
-        st.markdown("<div class='section-head'>⚠️ Delay Reasons (UNDLVRD_REASON)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-head'>⚠️ Delay Reasons Breakdown</div>", unsafe_allow_html=True)
         if col_reason:
-            reason_df = df[col_reason].fillna("No Reason Filled").value_counts().head(7).reset_index()
+            reason_df = df[df['REASON_STATUS'] == 'Filled']['REASON_CLEAN'].value_counts().head(7).reset_index()
             reason_df.columns = ['Reason', 'Count']
 
-            fig_reason = px.bar(
-                reason_df, x='Count', y='Reason', orientation='h', text='Count',
-                color='Count', color_continuous_scale='Reds'
-            )
-            fig_reason.update_layout(
-                showlegend=False, height=300, margin=dict(l=0, r=0, t=10, b=0),
-                yaxis={'categoryorder': 'total ascending'},
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='#000000', size=12, family='Inter')
-            )
-            fig_reason.update_traces(textfont_size=13, textfont_color='black')
-            st.plotly_chart(fig_reason, use_container_width=True)
+            if len(reason_df) > 0:
+                fig_reason = px.bar(
+                    reason_df, x='Count', y='Reason', orientation='h', text='Count',
+                    color='Count', color_continuous_scale='Reds'
+                )
+                fig_reason.update_layout(
+                    showlegend=False, height=300, margin=dict(l=0, r=0, t=10, b=0),
+                    yaxis={'categoryorder': 'total ascending'},
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='#000000', size=12, family='Inter')
+                )
+                fig_reason.update_traces(textfont_size=13, textfont_color='black')
+                st.plotly_chart(fig_reason, use_container_width=True)
+            else:
+                st.info("No updated delay reasons found for current selection.")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -471,59 +497,6 @@ if st.session_state["processed_df"] is not None:
             st.dataframe(display_load, use_container_width=True, hide_index=True, height=280)
         else:
             st.info("TODIST column not found in uploaded file.")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # SECTION 3: CEE_PINCODE & CONSIGNEE ANALYSIS
-    r2_col1, r2_col2 = st.columns(2)
-
-    with r2_col1:
-        st.markdown("<div class='section-head'>📍 CEE_PINCODE Summary (CN & PKG Count)</div>", unsafe_allow_html=True)
-        if col_pin:
-            pin_summary = df.groupby(col_pin).agg(
-                Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
-                Pending_CN_PKG=('CN_PKG_NUM', 'sum'),
-                Total_Weight=('CN_WT_NUM', 'sum')
-            ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
-            
-            pin_summary['Weight_Formatted'] = pin_summary['Total_Weight'].apply(format_weight)
-
-            if col_wt:
-                display_pin = pin_summary[[col_pin, 'Pending_CN_Count', 'Pending_CN_PKG', 'Weight_Formatted']]
-                display_pin.columns = ['Pincode (CEE_PINCODE)', 'Pending CN Count', 'Pending PKG', 'Weight Load']
-            else:
-                display_pin = pin_summary[[col_pin, 'Pending_CN_Count', 'Pending_CN_PKG']]
-                display_pin.columns = ['Pincode (CEE_PINCODE)', 'Pending CN Count', 'Pending PKG']
-            
-            t_pin1, t_pin2 = st.tabs(["📍 Top Pending Pincodes", "📌 Lowest Pending Pincodes"])
-            with t_pin1:
-                st.dataframe(display_pin.head(10), use_container_width=True, hide_index=True)
-            with t_pin2:
-                st.dataframe(display_pin.tail(10), use_container_width=True, hide_index=True)
-
-    with r2_col2:
-        st.markdown("<div class='section-head'>🏢 Consignee Analysis (CEE)</div>", unsafe_allow_html=True)
-        if col_cee:
-            cee_summary = df.groupby(col_cee).agg(
-                Pending_CN_Count=(col_cn if col_cn else col_todist, 'count'),
-                Pending_CN_PKG=('CN_PKG_NUM', 'sum'),
-                Total_Weight=('CN_WT_NUM', 'sum')
-            ).reset_index().sort_values(by='Pending_CN_Count', ascending=False)
-            
-            cee_summary['Weight_Formatted'] = cee_summary['Total_Weight'].apply(format_weight)
-
-            if col_wt:
-                display_cee = cee_summary[[col_cee, 'Pending_CN_Count', 'Pending_CN_PKG', 'Weight_Formatted']]
-                display_cee.columns = ['Consignee Name (CEE)', 'Pending CN Count', 'Pending PKG', 'Weight Load']
-            else:
-                display_cee = cee_summary[[col_cee, 'Pending_CN_Count', 'Pending_CN_PKG']]
-                display_cee.columns = ['Consignee Name (CEE)', 'Pending CN Count', 'Pending PKG']
-            
-            t_cee1, t_cee2 = st.tabs(["🔥 Top Pending Clients", "📉 Lowest Pending Clients"])
-            with t_cee1:
-                st.dataframe(display_cee.head(10), use_container_width=True, hide_index=True)
-            with t_cee2:
-                st.dataframe(display_cee.tail(10), use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
