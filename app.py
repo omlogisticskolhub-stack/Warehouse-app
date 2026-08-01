@@ -387,53 +387,46 @@ if st.session_state["processed_df"] is not None:
     filter_container = st.container()
 
     # =========================================================
-    # STEP 3: MASTER FILTERS (CLEAN COMPACT DROPDOWNS)
+    # STEP 3: MASTER FILTERS (DEFAULT = FULL FILE DISPLAY)
     # =========================================================
     with filter_container:
         st.markdown("<br>", unsafe_allow_html=True)
-        f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
+        f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1.2, 1, 1])
 
         # --- 1. TODIST HUB FILTER ---
         with f_col1:
-            hub_mode = st.selectbox(
-                "🏢 **TODIST Hub Selection:**",
-                options=["All Hubs Selected", "Select Specific Hubs"],
-                index=0,
+            hub_options = ["ALL HUBS (Full File)"] + all_hubs
+            selected_hub = st.selectbox(
+                "🏢 TODIST Hub Selection:", options=hub_options, index=0
             )
-            if hub_mode == "Select Specific Hubs":
-                selected_hubs = st.multiselect(
-                    "Choose Hubs:", options=all_hubs, default=[]
-                )
-            else:
-                selected_hubs = []
 
-        # --- 2. DATE FILTER (SINGLE / MULTIPLE / ALL) ---
+        # --- 2. DATE RANGE FILTER (CLEAN RANGE - NO TAG OVERFLOW) ---
         with f_col2:
-            date_mode = st.selectbox(
-                "🗓️ **Date Selection:**",
-                options=[
-                    "All Dates Selected",
-                    "Single Date",
-                    "Multiple Dates",
-                ],
-                index=0,
+            min_date = (
+                unique_dates_df["DATE_OBJ"].min().date()
+                if len(unique_dates_df) > 0
+                else datetime.today().date()
             )
-            if date_mode == "Single Date":
-                single_date = st.selectbox("Choose Date:", options=all_dates)
-                selected_dates = [single_date] if single_date else []
-            elif date_mode == "Multiple Dates":
-                selected_dates = st.multiselect(
-                    "Choose Multiple Dates:", options=all_dates, default=[]
-                )
-            else:
-                selected_dates = []
+            max_date = (
+                unique_dates_df["DATE_OBJ"].max().date()
+                if len(unique_dates_df) > 0
+                else datetime.today().date()
+            )
+
+            # Clean Date Picker Range (Default = All Dates Selected)
+            date_range = st.date_input(
+                "🗓️ Gate-In Date Range Filter:",
+                value=(min_date, max_date),
+                min_value=min_date,
+                max_value=max_date,
+            )
 
         # --- 3. REASON STATUS FILTER ---
         with f_col3:
             reason_filter = st.selectbox(
-                "⚡ **Reason Status Filter:**",
+                "⚡ Reason Status Filter:",
                 options=[
-                    "All Status",
+                    "All Status (Full Data)",
                     "Pending Reason Only",
                     "Updated Reason Only",
                 ],
@@ -442,10 +435,9 @@ if st.session_state["processed_df"] is not None:
 
         # --- 4. SPECIFIC REASON FILTER ---
         with f_col4:
-            selected_specific_reasons = st.multiselect(
-                "⚠️ **Specific Reason Filter:**",
-                options=all_specific_reasons,
-                default=[],
+            reason_options = ["ALL REASONS (Full File)"] + all_specific_reasons
+            selected_specific_reason = st.selectbox(
+                "⚠️ Specific Delay Reason:", options=reason_options, index=0
             )
 
     # =========================================================
@@ -453,19 +445,21 @@ if st.session_state["processed_df"] is not None:
     # =========================================================
     df_filtered = df_raw_loaded.copy()
 
-    # Apply Hub Filter
-    if hub_mode == "Select Specific Hubs" and selected_hubs:
+    # 1. Apply Hub Filter
+    if selected_hub != "ALL HUBS (Full File)":
         df_filtered = df_filtered[
-            df_filtered[col_todist].isin(selected_hubs)
+            df_filtered[col_todist] == selected_hub
         ].copy()
 
-    # Apply Date Filter
-    if date_mode in ["Single Date", "Multiple Dates"] and selected_dates:
+    # 2. Apply Date Range Filter
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_d, end_d = date_range
         df_filtered = df_filtered[
-            df_filtered["GATE_IN_DAY"].isin(selected_dates)
+            (df_filtered["DATE_OBJ"].dt.date >= start_d)
+            & (df_filtered["DATE_OBJ"].dt.date <= end_d)
         ].copy()
 
-    # Apply Reason Status Filter
+    # 3. Apply Reason Status Filter
     if reason_filter == "Pending Reason Only":
         df_filtered = df_filtered[
             df_filtered["REASON_STATUS"] == "Missing"
@@ -475,10 +469,10 @@ if st.session_state["processed_df"] is not None:
             df_filtered["REASON_STATUS"] == "Filled"
         ].copy()
 
-    # Apply Specific Reasons Filter
-    if selected_specific_reasons:
+    # 4. Apply Specific Reason Filter
+    if selected_specific_reason != "ALL REASONS (Full File)":
         df_filtered = df_filtered[
-            df_filtered["REASON_CLEAN"].isin(selected_specific_reasons)
+            df_filtered["REASON_CLEAN"] == selected_specific_reason
         ].copy()
 
     df = df_filtered.copy()
