@@ -9,7 +9,6 @@ st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide
 # ==========================================
 # 🔒 SIMPLE PASSWORD AUTHENTICATION SYSTEM
 # ==========================================
-# Fixed Password
 DASHBOARD_PASSWORD = st.secrets.get("DASHBOARD_PASSWORD", "Dhiraj@01072026")
 
 
@@ -58,7 +57,6 @@ if not check_password():
 # ==========================================
 # 🎨 DASHBOARD STYLING
 # ==========================================
-
 st.markdown(
     """
     <style>
@@ -389,32 +387,48 @@ if st.session_state["processed_df"] is not None:
     filter_container = st.container()
 
     # =========================================================
-    # STEP 3: MASTER FILTERS
+    # STEP 3: MASTER FILTERS (CLEAN COMPACT DROPDOWNS)
     # =========================================================
     with filter_container:
         st.markdown("<br>", unsafe_allow_html=True)
         f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
 
+        # --- 1. TODIST HUB FILTER ---
         with f_col1:
-            selected_hubs = st.multiselect(
-                "🏢 **TODIST Hub Filter:**",
-                options=all_hubs,
-                default=[],
-                help="Select TODIST hubs.",
+            hub_mode = st.selectbox(
+                "🏢 **TODIST Hub Selection:**",
+                options=["All Hubs Selected", "Select Specific Hubs"],
+                index=0,
             )
+            if hub_mode == "Select Specific Hubs":
+                selected_hubs = st.multiselect(
+                    "Choose Hubs:", options=all_hubs, default=[]
+                )
+            else:
+                selected_hubs = []
 
+        # --- 2. DATE FILTER (SINGLE / MULTIPLE / ALL) ---
         with f_col2:
-            select_all_dates = st.checkbox(
-                "✅ **Select All Dates**", value=True
+            date_mode = st.selectbox(
+                "🗓️ **Date Selection:**",
+                options=[
+                    "All Dates Selected",
+                    "Single Date",
+                    "Multiple Dates",
+                ],
+                index=0,
             )
-            default_date_selection = all_dates if select_all_dates else []
+            if date_mode == "Single Date":
+                single_date = st.selectbox("Choose Date:", options=all_dates)
+                selected_dates = [single_date] if single_date else []
+            elif date_mode == "Multiple Dates":
+                selected_dates = st.multiselect(
+                    "Choose Multiple Dates:", options=all_dates, default=[]
+                )
+            else:
+                selected_dates = []
 
-            selected_dates = st.multiselect(
-                "🗓️ **Select Dates:**",
-                options=all_dates,
-                default=default_date_selection,
-            )
-
+        # --- 3. REASON STATUS FILTER ---
         with f_col3:
             reason_filter = st.selectbox(
                 "⚡ **Reason Status Filter:**",
@@ -426,12 +440,12 @@ if st.session_state["processed_df"] is not None:
                 index=0,
             )
 
+        # --- 4. SPECIFIC REASON FILTER ---
         with f_col4:
             selected_specific_reasons = st.multiselect(
                 "⚠️ **Specific Reason Filter:**",
                 options=all_specific_reasons,
                 default=[],
-                help="Select specific updated delay reasons.",
             )
 
     # =========================================================
@@ -439,18 +453,19 @@ if st.session_state["processed_df"] is not None:
     # =========================================================
     df_filtered = df_raw_loaded.copy()
 
-    if selected_hubs:
+    # Apply Hub Filter
+    if hub_mode == "Select Specific Hubs" and selected_hubs:
         df_filtered = df_filtered[
             df_filtered[col_todist].isin(selected_hubs)
         ].copy()
 
-    if selected_dates:
+    # Apply Date Filter
+    if date_mode in ["Single Date", "Multiple Dates"] and selected_dates:
         df_filtered = df_filtered[
             df_filtered["GATE_IN_DAY"].isin(selected_dates)
         ].copy()
-    else:
-        df_filtered = df_filtered.iloc[0:0]
 
+    # Apply Reason Status Filter
     if reason_filter == "Pending Reason Only":
         df_filtered = df_filtered[
             df_filtered["REASON_STATUS"] == "Missing"
@@ -460,6 +475,7 @@ if st.session_state["processed_df"] is not None:
             df_filtered["REASON_STATUS"] == "Filled"
         ].copy()
 
+    # Apply Specific Reasons Filter
     if selected_specific_reasons:
         df_filtered = df_filtered[
             df_filtered["REASON_CLEAN"].isin(selected_specific_reasons)
