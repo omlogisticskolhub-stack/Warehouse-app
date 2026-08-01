@@ -9,7 +9,7 @@ st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide
 # ==========================================
 # 🔒 SIMPLE PASSWORD AUTHENTICATION SYSTEM
 # ==========================================
-# Best practice: Fetch from st.secrets if available, else fallback
+# Fixed Password
 DASHBOARD_PASSWORD = st.secrets.get("DASHBOARD_PASSWORD", "Dhiraj@01072026")
 
 
