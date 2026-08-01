@@ -9,7 +9,6 @@ st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide
 # ==========================================
 # 🔒 SIMPLE PASSWORD AUTHENTICATION SYSTEM
 # ==========================================
-# Fixed Password
 DASHBOARD_PASSWORD = st.secrets.get("DASHBOARD_PASSWORD", "Dhiraj@01072026")
 
 
@@ -368,10 +367,6 @@ if st.session_state["processed_df"] is not None:
         if col_todist
         else []
     )
-    unique_dates_df = df_raw_loaded.dropna(subset=["DATE_OBJ"]).sort_values(
-        by="DATE_OBJ", ascending=False
-    )
-    all_dates = unique_dates_df["GATE_IN_DAY"].unique().tolist()
 
     all_specific_reasons = (
         sorted(
@@ -385,15 +380,24 @@ if st.session_state["processed_df"] is not None:
         else []
     )
 
+    # Clean Min / Max Date calculation for default selection
+    valid_dates = df_raw_loaded.dropna(subset=["DATE_OBJ"])["DATE_OBJ"]
+    if not valid_dates.empty:
+        min_date_val = valid_dates.min().date()
+        max_date_val = valid_dates.max().date()
+    else:
+        min_date_val = datetime.today().date()
+        max_date_val = datetime.today().date()
+
     kpi_container = st.container()
     filter_container = st.container()
 
     # =========================================================
-    # STEP 3: MASTER FILTERS
+    # STEP 3: MASTER FILTERS (CLEAN DATE RANGE)
     # =========================================================
     with filter_container:
         st.markdown("<br>", unsafe_allow_html=True)
-        f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
+        f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1.2, 1, 1])
 
         with f_col1:
             selected_hubs = st.multiselect(
@@ -404,15 +408,12 @@ if st.session_state["processed_df"] is not None:
             )
 
         with f_col2:
-            select_all_dates = st.checkbox(
-                "✅ **Select All Dates**", value=True
-            )
-            default_date_selection = all_dates if select_all_dates else []
-
-            selected_dates = st.multiselect(
-                "🗓️ **Select Dates:**",
-                options=all_dates,
-                default=default_date_selection,
+            selected_date_range = st.date_input(
+                "🗓️ **Gate-In Date Range Filter:**",
+                value=(min_date_val, max_date_val),
+                min_value=min_date_val,
+                max_value=max_date_val,
+                help="Select start and end date to filter.",
             )
 
         with f_col3:
@@ -444,12 +445,18 @@ if st.session_state["processed_df"] is not None:
             df_filtered[col_todist].isin(selected_hubs)
         ].copy()
 
-    if selected_dates:
+    # Dynamic Date Filtering
+    if isinstance(selected_date_range, tuple) and len(selected_date_range) == 2:
+        start_d, end_d = selected_date_range
         df_filtered = df_filtered[
-            df_filtered["GATE_IN_DAY"].isin(selected_dates)
+            (df_filtered["DATE_OBJ"].dt.date >= start_d)
+            & (df_filtered["DATE_OBJ"].dt.date <= end_d)
         ].copy()
-    else:
-        df_filtered = df_filtered.iloc[0:0]
+    elif isinstance(selected_date_range, tuple) and len(selected_date_range) == 1:
+        single_d = selected_date_range[0]
+        df_filtered = df_filtered[
+            df_filtered["DATE_OBJ"].dt.date == single_d
+        ].copy()
 
     if reason_filter == "Pending Reason Only":
         df_filtered = df_filtered[
