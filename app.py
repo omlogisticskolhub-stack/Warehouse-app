@@ -9,6 +9,7 @@ st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide
 # ==========================================
 # 🔒 SIMPLE PASSWORD AUTHENTICATION SYSTEM
 # ==========================================
+# Fixed Password
 DASHBOARD_PASSWORD = st.secrets.get("DASHBOARD_PASSWORD", "Dhiraj@01072026")
 
 
@@ -57,6 +58,7 @@ if not check_password():
 # ==========================================
 # 🎨 DASHBOARD STYLING
 # ==========================================
+
 st.markdown(
     """
     <style>
@@ -387,57 +389,49 @@ if st.session_state["processed_df"] is not None:
     filter_container = st.container()
 
     # =========================================================
-    # STEP 3: MASTER FILTERS (DEFAULT = FULL FILE DISPLAY)
+    # STEP 3: MASTER FILTERS
     # =========================================================
     with filter_container:
         st.markdown("<br>", unsafe_allow_html=True)
-        f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1.2, 1, 1])
+        f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
 
-        # --- 1. TODIST HUB FILTER ---
         with f_col1:
-            hub_options = ["ALL HUBS (Full File)"] + all_hubs
-            selected_hub = st.selectbox(
-                "🏢 TODIST Hub Selection:", options=hub_options, index=0
+            selected_hubs = st.multiselect(
+                "🏢 **TODIST Hub Filter:**",
+                options=all_hubs,
+                default=[],
+                help="Select TODIST hubs.",
             )
 
-        # --- 2. DATE RANGE FILTER (CLEAN RANGE - NO TAG OVERFLOW) ---
         with f_col2:
-            min_date = (
-                unique_dates_df["DATE_OBJ"].min().date()
-                if len(unique_dates_df) > 0
-                else datetime.today().date()
+            select_all_dates = st.checkbox(
+                "✅ **Select All Dates**", value=True
             )
-            max_date = (
-                unique_dates_df["DATE_OBJ"].max().date()
-                if len(unique_dates_df) > 0
-                else datetime.today().date()
+            default_date_selection = all_dates if select_all_dates else []
+
+            selected_dates = st.multiselect(
+                "🗓️ **Select Dates:**",
+                options=all_dates,
+                default=default_date_selection,
             )
 
-            # Clean Date Picker Range (Default = All Dates Selected)
-            date_range = st.date_input(
-                "🗓️ Gate-In Date Range Filter:",
-                value=(min_date, max_date),
-                min_value=min_date,
-                max_value=max_date,
-            )
-
-        # --- 3. REASON STATUS FILTER ---
         with f_col3:
             reason_filter = st.selectbox(
-                "⚡ Reason Status Filter:",
+                "⚡ **Reason Status Filter:**",
                 options=[
-                    "All Status (Full Data)",
+                    "All Status",
                     "Pending Reason Only",
                     "Updated Reason Only",
                 ],
                 index=0,
             )
 
-        # --- 4. SPECIFIC REASON FILTER ---
         with f_col4:
-            reason_options = ["ALL REASONS (Full File)"] + all_specific_reasons
-            selected_specific_reason = st.selectbox(
-                "⚠️ Specific Delay Reason:", options=reason_options, index=0
+            selected_specific_reasons = st.multiselect(
+                "⚠️ **Specific Reason Filter:**",
+                options=all_specific_reasons,
+                default=[],
+                help="Select specific updated delay reasons.",
             )
 
     # =========================================================
@@ -445,21 +439,18 @@ if st.session_state["processed_df"] is not None:
     # =========================================================
     df_filtered = df_raw_loaded.copy()
 
-    # 1. Apply Hub Filter
-    if selected_hub != "ALL HUBS (Full File)":
+    if selected_hubs:
         df_filtered = df_filtered[
-            df_filtered[col_todist] == selected_hub
+            df_filtered[col_todist].isin(selected_hubs)
         ].copy()
 
-    # 2. Apply Date Range Filter
-    if isinstance(date_range, tuple) and len(date_range) == 2:
-        start_d, end_d = date_range
+    if selected_dates:
         df_filtered = df_filtered[
-            (df_filtered["DATE_OBJ"].dt.date >= start_d)
-            & (df_filtered["DATE_OBJ"].dt.date <= end_d)
+            df_filtered["GATE_IN_DAY"].isin(selected_dates)
         ].copy()
+    else:
+        df_filtered = df_filtered.iloc[0:0]
 
-    # 3. Apply Reason Status Filter
     if reason_filter == "Pending Reason Only":
         df_filtered = df_filtered[
             df_filtered["REASON_STATUS"] == "Missing"
@@ -469,10 +460,9 @@ if st.session_state["processed_df"] is not None:
             df_filtered["REASON_STATUS"] == "Filled"
         ].copy()
 
-    # 4. Apply Specific Reason Filter
-    if selected_specific_reason != "ALL REASONS (Full File)":
+    if selected_specific_reasons:
         df_filtered = df_filtered[
-            df_filtered["REASON_CLEAN"] == selected_specific_reason
+            df_filtered["REASON_CLEAN"].isin(selected_specific_reasons)
         ].copy()
 
     df = df_filtered.copy()
