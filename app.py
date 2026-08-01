@@ -118,6 +118,12 @@ st.markdown(
         letter-spacing: 0.5px;
     }
 
+    /* Keep Multi-Select Box Clean & Prevent Tags Overflow */
+    div[data-baseweb="select"] > div {
+        max-height: 100px !important;
+        overflow-y: auto !important;
+    }
+
     .section-head {
         font-size: 18px;
         font-weight: 900;
@@ -206,7 +212,7 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
-    with st.spinner("Processing Operations Data & Removing Duplicates..."):
+    with st.spinner("Processing Operations Data & Standardizing Dates..."):
         df_raw = pd.read_excel(uploaded_file)
         df_raw.columns = df_raw.columns.str.strip().str.upper()
 
@@ -257,16 +263,20 @@ if uploaded_file is not None:
 
         today = pd.to_datetime(datetime.today().date())
 
-        # Gate-In Date / Fallback CN Date Logic
-        primary_date = (
-            pd.to_datetime(df[col_gatein_date], dayfirst=True, errors="coerce")
-            if col_gatein_date
-            else pd.Series(dtype="datetime64[ns]")
+        # Gate-In Primary Logic -> Fallback to CN Date if Gate-In is Blank
+        def parse_dates_safely(series):
+            if series is None:
+                return pd.Series(dtype="datetime64[ns]")
+            parsed = pd.to_datetime(series, dayfirst=True, errors="coerce")
+            if parsed.isna().all():
+                parsed = pd.to_datetime(series, errors="coerce")
+            return parsed
+
+        primary_date = parse_dates_safely(
+            df[col_gatein_date] if col_gatein_date else None
         )
-        fallback_date = (
-            pd.to_datetime(df[col_cn_date], dayfirst=True, errors="coerce")
-            if col_cn_date
-            else pd.Series(dtype="datetime64[ns]")
+        fallback_date = parse_dates_safely(
+            df[col_cn_date] if col_cn_date else None
         )
 
         df["DATE_OBJ"] = primary_date.fillna(fallback_date)
@@ -380,20 +390,19 @@ if st.session_state["processed_df"] is not None:
         else []
     )
 
-    # Clean Min / Max Date calculation for default selection
-    valid_dates = df_raw_loaded.dropna(subset=["DATE_OBJ"])["DATE_OBJ"]
-    if not valid_dates.empty:
-        min_date_val = valid_dates.min().date()
-        max_date_val = valid_dates.max().date()
-    else:
-        min_date_val = datetime.today().date()
-        max_date_val = datetime.today().date()
+    # Unique List of Dates Sorted
+    all_dates = (
+        df_raw_loaded.dropna(subset=["DATE_OBJ"])
+        .sort_values(by="DATE_OBJ", ascending=False)["GATE_IN_DAY"]
+        .unique()
+        .tolist()
+    )
 
     kpi_container = st.container()
     filter_container = st.container()
 
     # =========================================================
-    # STEP 3: MASTER FILTERS (CLEAN DATE RANGE)
+    # STEP 3: MASTER FILTERS (MULTIPLE DATES SELECTION)
     # =========================================================
     with filter_container:
         st.markdown("<br>", unsafe_allow_html=True)
@@ -408,12 +417,12 @@ if st.session_state["processed_df"] is not None:
             )
 
         with f_col2:
-            selected_date_range = st.date_input(
-                "🗓️ **Gate-In Date Range Filter:**",
-                value=(min_date_val, max_date_val),
-                min_value=min_date_val,
-                max_value=max_date_val,
-                help="Select start and end date to filter.",
+            # Default includes ALL dates for 100% total metrics
+            selected_dates = st.multiselect(
+                "🗓️ **Select Date(s):**",
+                options=all_dates,
+                default=all_dates,
+                help="Select specific date(s) or leave all selected.",
             )
 
         with f_col3:
@@ -445,18 +454,14 @@ if st.session_state["processed_df"] is not None:
             df_filtered[col_todist].isin(selected_hubs)
         ].copy()
 
-    # Dynamic Date Filtering
-    if isinstance(selected_date_range, tuple) and len(selected_date_range) == 2:
-        start_d, end_d = selected_date_range
+    # Date Filtering Logic
+    if selected_dates:
         df_filtered = df_filtered[
-            (df_filtered["DATE_OBJ"].dt.date >= start_d)
-            & (df_filtered["DATE_OBJ"].dt.date <= end_d)
+            df_filtered["GATE_IN_DAY"].isin(selected_dates)
         ].copy()
-    elif isinstance(selected_date_range, tuple) and len(selected_date_range) == 1:
-        single_d = selected_date_range[0]
-        df_filtered = df_filtered[
-            df_filtered["DATE_OBJ"].dt.date == single_d
-        ].copy()
+    else:
+        # If user empties selection, show 0 records instead of crash
+        df_filtered = df_filtered.iloc[0:0]
 
     if reason_filter == "Pending Reason Only":
         df_filtered = df_filtered[
@@ -475,7 +480,7 @@ if st.session_state["processed_df"] is not None:
     df = df_filtered.copy()
 
     # =========================================================
-    # STEP 2: TOP KPI CARDS
+    # STEP 2: TOP KPI CARDS (DYNAMICS ACCORDING TO FILTER)
     # =========================================================
     total_cn = len(df)
     total_pkg = df["CN_PKG_NUM"].sum() if total_cn > 0 else 0
