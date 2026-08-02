@@ -9,13 +9,10 @@ st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide
 # ==========================================
 # 🔒 SIMPLE PASSWORD AUTHENTICATION SYSTEM
 # ==========================================
-# Fixed Password
 DASHBOARD_PASSWORD = st.secrets.get("DASHBOARD_PASSWORD", "Dhiraj@01072026")
 
 
 def check_password():
-    """Returns `True` if the user enters the correct password."""
-
     def password_entered():
         if st.session_state["entered_password"] == DASHBOARD_PASSWORD:
             st.session_state["password_correct"] = True
@@ -128,6 +125,14 @@ st.markdown(
         border-bottom: 3px solid #d32f2f;
     }
 
+    /* 📌 FIX FOR MULTISELECT OVERFLOW ISSUE */
+    div[data-baseweb="select"] > div {
+        max-height: 110px !important;
+        overflow-y: auto !important;
+        background-color: #ffffff !important;
+        border-radius: 6px !important;
+    }
+
     div[data-testid="stTable"], div[data-testid="stDataFrame"] {
         color: #000000 !important;
         font-weight: 700 !important;
@@ -150,21 +155,9 @@ st.markdown(
         font-weight: 800 !important;
     }
 
-    #MainMenu { visibility: hidden !important; display: none !important; }
-    header { visibility: hidden !important; display: none !important; }
-    footer { visibility: hidden !important; display: none !important; }
-    footer * { visibility: hidden !important; display: none !important; }
-    [data-testid="stHeader"] { visibility: hidden !important; display: none !important; }
-    [data-testid="stAppToolbar"] { display: none !important; }
-    [data-testid="stToolbar"] { display: none !important; }
-    [data-testid="stStatusWidget"] { display: none !important; }
-    .viewerBadge_container__1S-5D, .viewerBadge_link__1S-5D { display: none !important; }
-    #stDecoration { display: none !important; }
-    div[class*="viewerBadge"] { display: none !important; }
-    div[class*="styles_viewerBadge"] { display: none !important; }
-    [data-testid="manage-app-button"] { display: none !important; }
-    button[title="View fullscreen"] { display: none !important; }
-    a[href*="streamlit.io"] { display: none !important; }
+    #MainMenu, header, footer, [data-testid="stHeader"], [data-testid="stAppToolbar"], [data-testid="stToolbar"] {
+        visibility: hidden !important; display: none !important;
+    }
     </style>
 """,
     unsafe_allow_html=True,
@@ -252,13 +245,11 @@ if uploaded_file is not None:
 
         df = df_raw.copy()
 
-        # Deduplicate based on CN
         if col_cn:
             df = df.drop_duplicates(subset=[col_cn]).copy()
 
         today = pd.to_datetime(datetime.today().date())
 
-        # Gate-In Date / Fallback CN Date Logic
         primary_date = (
             pd.to_datetime(df[col_gatein_date], dayfirst=True, errors="coerce")
             if col_gatein_date
@@ -363,6 +354,23 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # MASTER METRIC SELECTOR
+    top_sel_col1, top_sel_col2 = st.columns([2, 3])
+    with top_sel_col1:
+        st.markdown(
+            "### 🎯 **Primary Analysis Mode (Global Filter):**"
+        )
+    with top_sel_col2:
+        global_metric = st.radio(
+            "",
+            options=["CN Wise", "Package Wise", "Ton / Weight Wise"],
+            index=0,
+            horizontal=True,
+            key="global_metric_choice",
+        )
+
+    st.markdown("<hr style='margin-top:0px; margin-bottom:15px;'>", unsafe_allow_html=True)
+
     all_hubs = (
         sorted(df_raw_loaded[col_todist].dropna().unique().tolist())
         if col_todist
@@ -392,7 +400,6 @@ if st.session_state["processed_df"] is not None:
     # STEP 3: MASTER FILTERS
     # =========================================================
     with filter_container:
-        st.markdown("<br>", unsafe_allow_html=True)
         f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
 
         with f_col1:
@@ -434,9 +441,7 @@ if st.session_state["processed_df"] is not None:
                 help="Select specific updated delay reasons.",
             )
 
-    # =========================================================
-    # ⚡ MASTER DYNAMIC FILTERING LOGIC
-    # =========================================================
+    # Dynamic Filtering
     df_filtered = df_raw_loaded.copy()
 
     if selected_hubs:
@@ -467,9 +472,21 @@ if st.session_state["processed_df"] is not None:
 
     df = df_filtered.copy()
 
-    # =========================================================
-    # STEP 2: TOP KPI CARDS
-    # =========================================================
+    # Dynamically Assign Load Column
+    if global_metric == "CN Wise":
+        df["ACTIVE_LOAD"] = 1
+        metric_label = "CNs"
+        metric_title = "CN Count"
+    elif global_metric == "Package Wise":
+        df["ACTIVE_LOAD"] = df["CN_PKG_NUM"]
+        metric_label = "PKG"
+        metric_title = "Package Count"
+    else:
+        df["ACTIVE_LOAD"] = (df["CN_WT_NUM"] / 1000.0).round(2)
+        metric_label = "Ton"
+        metric_title = "Weight (Tons)"
+
+    # Top KPI Cards
     total_cn = len(df)
     total_pkg = df["CN_PKG_NUM"].sum() if total_cn > 0 else 0
     total_wt = df["CN_WT_NUM"].sum() if total_cn > 0 else 0
@@ -505,8 +522,7 @@ if st.session_state["processed_df"] is not None:
 
     with r1_col1:
         st.markdown(
-            "<div class='section-head'>⏱️ Aging Hours Breakdown"
-            " (Gate-In)</div>",
+            f"<div class='section-head'>⏱️ Aging Hours Breakdown ({metric_title})</div>",
             unsafe_allow_html=True,
         )
         bucket_order = [
@@ -516,20 +532,26 @@ if st.session_state["processed_df"] is not None:
             "24 Hour Above",
             "24 Hour Below",
         ]
+
         bucket_df = (
-            df["Aging_Bucket"]
-            .value_counts()
+            df.groupby("Aging_Bucket")["ACTIVE_LOAD"]
+            .sum()
             .reindex(bucket_order)
             .fillna(0)
             .reset_index()
         )
-        bucket_df.columns = ["Hour Bucket", "Shipment Count"]
+        bucket_df.columns = ["Hour Bucket", "Load"]
+
+        if global_metric == "Ton / Weight Wise":
+            bucket_df["Text"] = bucket_df["Load"].apply(lambda x: f"{x:.2f} Ton")
+        else:
+            bucket_df["Text"] = bucket_df["Load"].apply(lambda x: f"{int(x):,}")
 
         fig_bucket = px.bar(
             bucket_df,
             x="Hour Bucket",
-            y="Shipment Count",
-            text="Shipment Count",
+            y="Load",
+            text="Text",
             color="Hour Bucket",
             color_discrete_map={
                 "96 Hour Above": "#b91c1c",
@@ -547,31 +569,38 @@ if st.session_state["processed_df"] is not None:
             plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#000000", size=12, family="Inter"),
         )
-        fig_bucket.update_traces(textfont_size=13, textfont_color="black")
+        fig_bucket.update_traces(textposition="outside", textfont_size=12, textfont_color="black")
         st.plotly_chart(fig_bucket, use_container_width=True)
 
     with r1_col2:
         st.markdown(
-            "<div class='section-head'>⚠️ Delay Reasons Breakdown</div>",
+            f"<div class='section-head'>⚠️ Delay Reasons Breakdown ({metric_title})</div>",
             unsafe_allow_html=True,
         )
         if col_reason:
             reason_df = (
-                df[df["REASON_STATUS"] == "Filled"]["REASON_CLEAN"]
-                .value_counts()
-                .head(7)
+                df[df["REASON_STATUS"] == "Filled"]
+                .groupby("REASON_CLEAN")["ACTIVE_LOAD"]
+                .sum()
                 .reset_index()
+                .sort_values(by="ACTIVE_LOAD", ascending=False)
+                .head(7)
             )
-            reason_df.columns = ["Reason", "Count"]
+            reason_df.columns = ["Reason", "Load"]
 
             if len(reason_df) > 0:
+                if global_metric == "Ton / Weight Wise":
+                    reason_df["Text"] = reason_df["Load"].apply(lambda x: f"{x:.2f} Ton")
+                else:
+                    reason_df["Text"] = reason_df["Load"].apply(lambda x: f"{int(x):,}")
+
                 fig_reason = px.bar(
                     reason_df,
-                    x="Count",
+                    x="Load",
                     y="Reason",
                     orientation="h",
-                    text="Count",
-                    color="Count",
+                    text="Text",
+                    color="Load",
                     color_continuous_scale="Reds",
                 )
                 fig_reason.update_layout(
@@ -584,17 +613,15 @@ if st.session_state["processed_df"] is not None:
                     font=dict(color="#000000", size=12, family="Inter"),
                 )
                 fig_reason.update_traces(
-                    textfont_size=13, textfont_color="black"
+                    textposition="outside", textfont_size=11, textfont_color="black"
                 )
                 st.plotly_chart(fig_reason, use_container_width=True)
             else:
-                st.info(
-                    "No updated delay reasons found for current selection."
-                )
+                st.info("No updated delay reasons found for current selection.")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # SECTION 2: MISSING REASONS & TODIST DESTINATION LOAD
+    # SECTION 2: MISSING REASONS & VERTICAL TODIST LOAD BAR CHART
     s2_col1, s2_col2 = st.columns(2)
 
     with s2_col1:
@@ -749,58 +776,66 @@ if st.session_state["processed_df"] is not None:
 
     with s2_col2:
         st.markdown(
-            "<div class='section-head'>🎯 Total TODIST Load Summary</div>",
+            f"<div class='section-head'>📊 TODIST Load Breakdown - ({metric_title})</div>",
             unsafe_allow_html=True,
         )
-        if col_todist:
-            todist_summary = (
-                df.groupby(col_todist)
-                .agg(
-                    Pending_CN_Count=(col_cn if col_cn else col_todist, "count"),
-                    Pending_CN_PKG=("CN_PKG_NUM", "sum"),
-                    Total_Weight=("CN_WT_NUM", "sum"),
-                )
+
+        if col_todist and len(df) > 0:
+            # Aggregate TODIST Load according to active global metric
+            todist_agg = (
+                df.groupby(col_todist)["ACTIVE_LOAD"]
+                .sum()
                 .reset_index()
-                .sort_values(by="Pending_CN_Count", ascending=False)
+                .sort_values(by="ACTIVE_LOAD", ascending=False) # Highest load first
             )
 
-            todist_summary["Weight_Formatted"] = todist_summary[
-                "Total_Weight"
-            ].apply(format_weight)
-
-            if col_wt:
-                display_load = todist_summary[
-                    [
-                        col_todist,
-                        "Pending_CN_Count",
-                        "Pending_CN_PKG",
-                        "Weight_Formatted",
-                    ]
-                ]
-                display_load.columns = [
-                    "TODIST Hub",
-                    "Pending CN Count",
-                    "Total Pending PKG",
-                    "Total Weight Load",
-                ]
+            if global_metric == "Ton / Weight Wise":
+                todist_agg["Display_Text"] = todist_agg["ACTIVE_LOAD"].apply(
+                    lambda x: f"{x:.2f} Ton"
+                )
+            elif global_metric == "Package Wise":
+                todist_agg["Display_Text"] = todist_agg["ACTIVE_LOAD"].apply(
+                    lambda x: f"{int(x):,} PKG"
+                )
             else:
-                display_load = todist_summary[
-                    [col_todist, "Pending_CN_Count", "Pending_CN_PKG"]
-                ]
-                display_load.columns = [
-                    "TODIST Hub",
-                    "Pending CN Count",
-                    "Total Pending PKG",
-                ]
+                todist_agg["Display_Text"] = todist_agg["ACTIVE_LOAD"].apply(
+                    lambda x: f"{int(x):,} CN"
+                )
 
-            st.dataframe(
-                display_load,
-                use_container_width=True,
-                hide_index=True,
-                height=280,
+            # 📌 VERTICAL BAR CHART (Down to Up)
+            fig_todist_bar = px.bar(
+                todist_agg,
+                x=col_todist,
+                y="ACTIVE_LOAD",
+                text="Display_Text",
+                color="ACTIVE_LOAD",
+                color_continuous_scale="Reds",
             )
-        else:
+
+            fig_todist_bar.update_layout(
+                showlegend=False,
+                height=320,
+                margin=dict(l=0, r=0, t=10, b=0),
+                xaxis_title="TODIST Hubs",
+                yaxis_title=metric_title,
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#000000", size=11, family="Inter"),
+                coloraxis_showscale=False,
+            )
+
+            fig_todist_bar.update_traces(
+                textposition="outside",
+                textfont_size=11,
+                textfont_color="black",
+            )
+
+            st.plotly_chart(fig_todist_bar, use_container_width=True)
+
+        elif not col_todist:
             st.info("TODIST column not found in uploaded file.")
+        else:
+            st.info("No data available for the selected filters.")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
