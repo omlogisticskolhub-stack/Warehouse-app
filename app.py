@@ -9,7 +9,6 @@ st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide
 # ==========================================
 # 🔒 SIMPLE PASSWORD AUTHENTICATION SYSTEM
 # ==========================================
-# Fixed Password
 DASHBOARD_PASSWORD = st.secrets.get("DASHBOARD_PASSWORD", "Dhiraj@01072026")
 
 
@@ -225,7 +224,7 @@ if uploaded_file is not None:
             ["CN_PKG", "PKG", "BOX", "QTY", "PIECES"], df_raw
         )
         col_wt = find_column(
-            ["ACT_WT", "CHG_WT", "WT", "WEIGHT", "TOTAL_WEIGHT", "KGS"], df_raw
+            ["CN_ACTUAL_WEIGHT", "ACT_WT", "CHG_WT", "WT", "WEIGHT", "TOTAL_WEIGHT", "KGS"], df_raw
         )
         col_todist = find_column(
             ["TODIST", "DESTINATION", "LOCATION", "HUB"], df_raw
@@ -497,6 +496,69 @@ if st.session_state["processed_df"] is not None:
         c5.metric("Avg Aging", f"{avg_days} Days")
         c6.metric("Pending Reason", f"{pending_reason_count:,}")
         c7.metric("Reason Updated", f"{updated_reason_count:,}")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # =========================================================
+    # 📊 NEW SECTION: DYNAMIC TODIST BAR CHART WITH METRIC SELECTOR
+    # =========================================================
+    st.markdown("<div class='section-head'>📊 TODIST Hub-Wise Dynamic Analytics</div>", unsafe_allow_html=True)
+    
+    b_col1, b_col2 = st.columns([1, 3])
+    with b_col1:
+        metric_choice = st.radio(
+            "**Select Bar Chart View Metric:**",
+            options=["CN Count", "Total Packages", "Total Weight (Kg)"],
+            index=0,
+            key="todist_metric_selector"
+        )
+    
+    with b_col2:
+        if col_todist and len(df) > 0:
+            todist_agg = df.groupby(col_todist).agg(
+                Total_CNs=(col_cn if col_cn else col_todist, "count"),
+                Total_PKG=("CN_PKG_NUM", "sum"),
+                Total_WT=("CN_WT_NUM", "sum")
+            ).reset_index()
+
+            if metric_choice == "CN Count":
+                y_col = "Total_CNs"
+                y_label = "Total Unique CNs"
+                color_hex = "#3b82f6"
+            elif metric_choice == "Total Packages":
+                y_col = "Total_PKG"
+                y_label = "Total Packages (CN_PKG)"
+                color_hex = "#f59e0b"
+            else:
+                y_col = "Total_WT"
+                y_label = "Total Weight in Kg (CN_ACTUAL_WEIGHT)"
+                color_hex = "#10b981"
+
+            todist_agg = todist_agg.sort_values(by=y_col, ascending=False)
+
+            fig_todist = px.bar(
+                todist_agg,
+                x=col_todist,
+                y=y_col,
+                text=y_col,
+                title=f"TODIST Destination Breakdown by {y_label}",
+                labels={col_todist: "TODIST Hub", y_col: y_label},
+                color_discrete_sequence=[color_hex]
+            )
+            fig_todist.update_traces(texttemplate='%{text:,}', textposition='outside')
+            fig_todist.update_layout(
+                height=350,
+                margin=dict(l=10, r=10, t=40, b=10),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#000000", size=12, family="Inter"),
+                xaxis_tickangle=-25
+            )
+            st.plotly_chart(fig_todist, use_container_width=True)
+        elif len(df) == 0:
+            st.info("No records available for the selected filters.")
+        else:
+            st.warning("TODIST column missing in dataset.")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
