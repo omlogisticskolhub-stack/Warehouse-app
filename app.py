@@ -53,7 +53,7 @@ if not check_password():
     st.stop()
 
 # ==========================================
-# 🎨 DASHBOARD STYLING & MULTISELECT OVERFLOW FIX
+# 🎨 DASHBOARD STYLING
 # ==========================================
 
 st.markdown(
@@ -123,18 +123,6 @@ st.markdown(
         margin-bottom: 12px;
         padding-bottom: 6px;
         border-bottom: 3px solid #d32f2f;
-    }
-
-    /* 📌 FIXED DATE MULTISELECT CONTAINMENT (NO OUTSIDE OVERFLOW) */
-    div[data-baseweb="select"] {
-        max-height: 80px !important;
-        overflow-y: auto !important;
-        border-radius: 6px !important;
-        border: 1px solid #cbd5e1 !important;
-        background-color: #ffffff !important;
-    }
-    div[data-baseweb="tag"] {
-        margin: 2px !important;
     }
 
     div[data-testid="stTable"], div[data-testid="stDataFrame"] {
@@ -358,23 +346,6 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 📌 GLOBAL MASTER METRIC SELECTOR
-    top_sel_col1, top_sel_col2 = st.columns([2, 3])
-    with top_sel_col1:
-        st.markdown(
-            "### 🎯 **Primary Analysis Mode:**"
-        )
-    with top_sel_col2:
-        global_metric = st.radio(
-            "Select Dashboard Metric:",
-            options=["CN Wise", "Package Wise", "Ton / Weight Wise"],
-            index=0,
-            horizontal=True,
-            key="global_metric_choice",
-        )
-
-    st.markdown("<hr style='margin-top:5px; margin-bottom:15px;'>", unsafe_allow_html=True)
-
     all_hubs = (
         sorted(df_raw_loaded[col_todist].dropna().unique().tolist())
         if col_todist
@@ -476,17 +447,6 @@ if st.session_state["processed_df"] is not None:
 
     df = df_filtered.copy()
 
-    # Dynamically Assign Load Column
-    if global_metric == "CN Wise":
-        df["ACTIVE_LOAD"] = 1
-        metric_title = "CN Count"
-    elif global_metric == "Package Wise":
-        df["ACTIVE_LOAD"] = df["CN_PKG_NUM"]
-        metric_title = "Package Count"
-    else:
-        df["ACTIVE_LOAD"] = (df["CN_WT_NUM"] / 1000.0).round(2)
-        metric_title = "Weight (Tons)"
-
     # Top KPI Cards
     total_cn = len(df)
     total_pkg = df["CN_PKG_NUM"].sum() if total_cn > 0 else 0
@@ -523,7 +483,7 @@ if st.session_state["processed_df"] is not None:
 
     with r1_col1:
         st.markdown(
-            f"<div class='section-head'>⏱️ Aging Hours Breakdown ({metric_title})</div>",
+            "<div class='section-head'>⏱️ Aging Hours Breakdown (CN Wise)</div>",
             unsafe_allow_html=True,
         )
         bucket_order = [
@@ -535,23 +495,15 @@ if st.session_state["processed_df"] is not None:
         ]
 
         bucket_df = (
-            df.groupby("Aging_Bucket")["ACTIVE_LOAD"]
-            .sum()
-            .reindex(bucket_order)
-            .fillna(0)
-            .reset_index()
+            df["Aging_Bucket"].value_counts().reindex(bucket_order).fillna(0).reset_index()
         )
-        bucket_df.columns = ["Hour Bucket", "Load"]
-
-        if global_metric == "Ton / Weight Wise":
-            bucket_df["Text"] = bucket_df["Load"].apply(lambda x: f"{x:.2f} Ton")
-        else:
-            bucket_df["Text"] = bucket_df["Load"].apply(lambda x: f"{int(x):,}")
+        bucket_df.columns = ["Hour Bucket", "CN Count"]
+        bucket_df["Text"] = bucket_df["CN Count"].apply(lambda x: f"{int(x):,}")
 
         fig_bucket = px.bar(
             bucket_df,
             x="Hour Bucket",
-            y="Load",
+            y="CN Count",
             text="Text",
             color="Hour Bucket",
             color_discrete_map={
@@ -575,33 +527,28 @@ if st.session_state["processed_df"] is not None:
 
     with r1_col2:
         st.markdown(
-            f"<div class='section-head'>⚠️ Delay Reasons Breakdown ({metric_title})</div>",
+            "<div class='section-head'>⚠️ Delay Reasons Breakdown</div>",
             unsafe_allow_html=True,
         )
         if col_reason:
             reason_df = (
-                df[df["REASON_STATUS"] == "Filled"]
-                .groupby("REASON_CLEAN")["ACTIVE_LOAD"]
-                .sum()
+                df[df["REASON_STATUS"] == "Filled"]["REASON_CLEAN"]
+                .value_counts()
                 .reset_index()
-                .sort_values(by="ACTIVE_LOAD", ascending=False)
                 .head(7)
             )
-            reason_df.columns = ["Reason", "Load"]
+            reason_df.columns = ["Reason", "Count"]
 
             if len(reason_df) > 0:
-                if global_metric == "Ton / Weight Wise":
-                    reason_df["Text"] = reason_df["Load"].apply(lambda x: f"{x:.2f} Ton")
-                else:
-                    reason_df["Text"] = reason_df["Load"].apply(lambda x: f"{int(x):,}")
+                reason_df["Text"] = reason_df["Count"].apply(lambda x: f"{int(x):,}")
 
                 fig_reason = px.bar(
                     reason_df,
-                    x="Load",
+                    x="Count",
                     y="Reason",
                     orientation="h",
                     text="Text",
-                    color="Load",
+                    color="Count",
                     color_continuous_scale="Reds",
                 )
                 fig_reason.update_layout(
@@ -777,29 +724,47 @@ if st.session_state["processed_df"] is not None:
 
     with s2_col2:
         st.markdown(
-            f"<div class='section-head'>📊 TODIST Load Breakdown - ({metric_title})</div>",
+            "<div class='section-head'>📊 TODIST Load Breakdown</div>",
             unsafe_allow_html=True,
         )
 
         if col_todist and len(df) > 0:
-            # Aggregate TODIST Load according to active global metric
-            todist_agg = (
-                df.groupby(col_todist)["ACTIVE_LOAD"]
-                .sum()
-                .reset_index()
-                .sort_values(by="ACTIVE_LOAD", ascending=False) # Highest load first
+            # 📌 TOGGLE FOR TODIST BAR CHART METRIC ONLY
+            todist_metric_choice = st.radio(
+                "Select TODIST Bar View:",
+                options=["CN Wise", "Package Wise", "Ton / Weight Wise"],
+                horizontal=True,
+                key="todist_unique_key_toggle",
             )
 
-            if global_metric == "Ton / Weight Wise":
-                todist_agg["Display_Text"] = todist_agg["ACTIVE_LOAD"].apply(
+            # Assign Dynamic Load for Bar Plot
+            if todist_metric_choice == "CN Wise":
+                df["BAR_LOAD"] = 1
+                chart_y_label = "CN Count"
+            elif todist_metric_choice == "Package Wise":
+                df["BAR_LOAD"] = df["CN_PKG_NUM"]
+                chart_y_label = "Package Count"
+            else:
+                df["BAR_LOAD"] = (df["CN_WT_NUM"] / 1000.0).round(2)
+                chart_y_label = "Weight (Tons)"
+
+            todist_agg = (
+                df.groupby(col_todist)["BAR_LOAD"]
+                .sum()
+                .reset_index()
+                .sort_values(by="BAR_LOAD", ascending=False)
+            )
+
+            if todist_metric_choice == "Ton / Weight Wise":
+                todist_agg["Display_Text"] = todist_agg["BAR_LOAD"].apply(
                     lambda x: f"{x:.2f} Ton"
                 )
-            elif global_metric == "Package Wise":
-                todist_agg["Display_Text"] = todist_agg["ACTIVE_LOAD"].apply(
+            elif todist_metric_choice == "Package Wise":
+                todist_agg["Display_Text"] = todist_agg["BAR_LOAD"].apply(
                     lambda x: f"{int(x):,} PKG"
                 )
             else:
-                todist_agg["Display_Text"] = todist_agg["ACTIVE_LOAD"].apply(
+                todist_agg["Display_Text"] = todist_agg["BAR_LOAD"].apply(
                     lambda x: f"{int(x):,} CN"
                 )
 
@@ -807,18 +772,18 @@ if st.session_state["processed_df"] is not None:
             fig_todist_bar = px.bar(
                 todist_agg,
                 x=col_todist,
-                y="ACTIVE_LOAD",
+                y="BAR_LOAD",
                 text="Display_Text",
-                color="ACTIVE_LOAD",
+                color="BAR_LOAD",
                 color_continuous_scale="Reds",
             )
 
             fig_todist_bar.update_layout(
                 showlegend=False,
-                height=320,
+                height=280,
                 margin=dict(l=0, r=0, t=10, b=0),
                 xaxis_title="TODIST Hubs",
-                yaxis_title=metric_title,
+                yaxis_title=chart_y_label,
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#000000", size=11, family="Inter"),
