@@ -53,7 +53,7 @@ if not check_password():
     st.stop()
 
 # ==========================================
-# 🎨 DASHBOARD STYLING
+# 🎨 DASHBOARD STYLING & MULTISELECT OVERFLOW FIX
 # ==========================================
 
 st.markdown(
@@ -125,12 +125,16 @@ st.markdown(
         border-bottom: 3px solid #d32f2f;
     }
 
-    /* 📌 FIX FOR MULTISELECT OVERFLOW ISSUE */
-    div[data-baseweb="select"] > div {
-        max-height: 110px !important;
+    /* 📌 FIXED DATE MULTISELECT CONTAINMENT (NO OUTSIDE OVERFLOW) */
+    div[data-baseweb="select"] {
+        max-height: 80px !important;
         overflow-y: auto !important;
-        background-color: #ffffff !important;
         border-radius: 6px !important;
+        border: 1px solid #cbd5e1 !important;
+        background-color: #ffffff !important;
+    }
+    div[data-baseweb="tag"] {
+        margin: 2px !important;
     }
 
     div[data-testid="stTable"], div[data-testid="stDataFrame"] {
@@ -354,22 +358,22 @@ if st.session_state["processed_df"] is not None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # MASTER METRIC SELECTOR
+    # 📌 GLOBAL MASTER METRIC SELECTOR
     top_sel_col1, top_sel_col2 = st.columns([2, 3])
     with top_sel_col1:
         st.markdown(
-            "### 🎯 **Primary Analysis Mode (Global Filter):**"
+            "### 🎯 **Primary Analysis Mode:**"
         )
     with top_sel_col2:
         global_metric = st.radio(
-            "",
+            "Select Dashboard Metric:",
             options=["CN Wise", "Package Wise", "Ton / Weight Wise"],
             index=0,
             horizontal=True,
             key="global_metric_choice",
         )
 
-    st.markdown("<hr style='margin-top:0px; margin-bottom:15px;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin-top:5px; margin-bottom:15px;'>", unsafe_allow_html=True)
 
     all_hubs = (
         sorted(df_raw_loaded[col_todist].dropna().unique().tolist())
@@ -475,15 +479,12 @@ if st.session_state["processed_df"] is not None:
     # Dynamically Assign Load Column
     if global_metric == "CN Wise":
         df["ACTIVE_LOAD"] = 1
-        metric_label = "CNs"
         metric_title = "CN Count"
     elif global_metric == "Package Wise":
         df["ACTIVE_LOAD"] = df["CN_PKG_NUM"]
-        metric_label = "PKG"
         metric_title = "Package Count"
     else:
         df["ACTIVE_LOAD"] = (df["CN_WT_NUM"] / 1000.0).round(2)
-        metric_label = "Ton"
         metric_title = "Weight (Tons)"
 
     # Top KPI Cards
@@ -802,7 +803,7 @@ if st.session_state["processed_df"] is not None:
                     lambda x: f"{int(x):,} CN"
                 )
 
-            # 📌 VERTICAL BAR CHART (Down to Up)
+            # 📌 VERTICAL BAR CHART (Down to Up Bars)
             fig_todist_bar = px.bar(
                 todist_agg,
                 x=col_todist,
