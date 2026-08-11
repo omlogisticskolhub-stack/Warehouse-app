@@ -1,38 +1,34 @@
 from datetime import datetime
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 
-# Page Configuration - Clean & Fast Dashboard
-st.set_page_config(
-    page_title="Floor Ops Analytics - Om Logistics",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# Page Configuration - Clean Dashboard
+st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide")
 
 # ==========================================
-# 🔒 SECURITY
+# 🔒 SIMPLE PASSWORD AUTHENTICATION SYSTEM
 # ==========================================
 DASHBOARD_PASSWORD = st.secrets.get("DASHBOARD_PASSWORD", "Dhiraj@01072026")
 
 
 def check_password():
+    """Returns `True` if the user enters the correct password."""
+
+    def password_entered():
+        if st.session_state["entered_password"] == DASHBOARD_PASSWORD:
+            st.session_state["password_correct"] = True
+            del st.session_state["entered_password"]
+        else:
+            st.session_state["password_correct"] = False
+
     if "password_correct" not in st.session_state:
-
-        def password_entered():
-            if st.session_state["entered_password"] == DASHBOARD_PASSWORD:
-                st.session_state["password_correct"] = True
-                del st.session_state["entered_password"]
-            else:
-                st.session_state["password_correct"] = False
-
         st.markdown("<br><br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.markdown("### 🚛 Floor Ops Analytics - Om Logistics")
             st.text_input(
-                "🔒 Enter Password to Access:",
+                "🔒 Enter Dashboard Password to Access:",
                 type="password",
                 on_change=password_entered,
                 key="entered_password",
@@ -44,286 +40,313 @@ def check_password():
         with col2:
             st.markdown("### 🚛 Floor Ops Analytics - Om Logistics")
             st.text_input(
-                "🔒 Enter Password to Access:",
+                "🔒 Enter Dashboard Password to Access:",
                 type="password",
+                on_change=password_entered,
                 key="entered_password",
             )
-            st.error("❌ Incorrect Password!")
+            st.error("❌ Incorrect Password! Please try again.")
         return False
-    return True
+    else:
+        return True
 
 
 if not check_password():
     st.stop()
 
 # ==========================================
-# 🎨 HIGH GRAPHICS THEME CONTROLLER
+# 🎨 DASHBOARD STYLING
 # ==========================================
-with st.sidebar:
-    st.markdown("## 🎨 Visual Controls")
-    theme_choice = st.selectbox(
-        "Choose Dashboard Theme:",
-        options=[
-            "Om Red (Default)",
-            "Dark Neon Glass",
-            "Modern Corporate Blue",
-            "Emerald Ops",
-        ],
-        index=0,
-    )
-    st.markdown("---")
-    if st.button("🔒 Logout"):
-        st.session_state["password_correct"] = False
-        st.rerun()
-
-# Theme CSS Injector
-THEMES = {
-    "Om Red (Default)": {
-        "bg": "#f8fafc",
-        "card_bg": "#ffffff",
-        "primary": "#d32f2f",
-        "text": "#0f172a",
-        "card_border": "#e2e8f0",
-        "plotly_template": "plotly_white",
-    },
-    "Dark Neon Glass": {
-        "bg": "#0f172a",
-        "card_bg": "#1e293b",
-        "primary": "#38bdf8",
-        "text": "#f8fafc",
-        "card_border": "#334155",
-        "plotly_template": "plotly_dark",
-    },
-    "Modern Corporate Blue": {
-        "bg": "#f1f5f9",
-        "card_bg": "#ffffff",
-        "primary": "#2563eb",
-        "text": "#1e293b",
-        "card_border": "#cbd5e1",
-        "plotly_template": "plotly_white",
-    },
-    "Emerald Ops": {
-        "bg": "#f0fdf4",
-        "card_bg": "#ffffff",
-        "primary": "#16a34a",
-        "text": "#064e3b",
-        "card_border": "#bbf7d0",
-        "plotly_template": "plotly_white",
-    },
-}
-
-current_theme = THEMES[theme_choice]
 
 st.markdown(
-    f"""
+    """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
-    
-    html, body, [class*="css"] {{
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        background-color: {current_theme["bg"]} !important;
-        color: {current_theme["text"]} !important;
-    }}
-    
-    /* Premium Header */
-    .hub-header {{
-        background: linear-gradient(135deg, {current_theme["primary"]} 0%, #000000 100%);
-        padding: 20px 30px;
-        margin: -4rem -2rem 24px -2rem;
-        border-bottom: 4px solid {current_theme["primary"]};
-        box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
-        color: #ffffff !important;
-    }}
-    .hub-title {{
-        font-size: 28px !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.5px;
-        color: #ffffff !important;
-    }}
-    .hub-subtitle {{
-        font-size: 14px;
-        opacity: 0.9;
-        color: #f1f5f9 !important;
-    }}
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
-    /* High Graphics KPI Cards */
-    div[data-testid="stMetric"] {{
-        background: {current_theme["card_bg"]} !important;
-        padding: 16px !important;
-        border-radius: 12px !important;
-        border: 1px solid {current_theme["card_border"]} !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }}
-    div[data-testid="stMetric"]:hover {{
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1) !important;
-    }}
-    div[data-testid="stMetricValue"] {{
+    html, body, [class*="css"] {
+        font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
+        color: #000000 !important;
+    }
+
+    .stApp {
+        background-color: #f4f6f9;
+    }
+
+    .hub-header {
+        background-color: #ffffff;
+        padding: 16px 28px;
+        margin: -4rem -2rem 20px -2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 3px solid #d32f2f;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .hub-title {
         font-size: 26px !important;
-        color: {current_theme["text"]} !important;
-        font-weight: 800 !important;
-    }}
-    div[data-testid="stMetricLabel"] {{
-        font-size: 11px !important;
-        color: {current_theme["text"]} !important;
-        opacity: 0.7;
-        font-weight: 700 !important;
+        font-weight: 900 !important;
+        color: #d32f2f !important;
+        letter-spacing: -0.5px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .hub-subtitle {
+        font-size: 14px;
+        color: #111827;
+        font-weight: 700;
+    }
+
+    div[data-testid="stMetric"] {
+        background: #ffffff !important;
+        padding: 14px 16px !important;
+        border-radius: 8px !important;
+        border: 2px solid #cbd5e1 !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05) !important;
+        text-align: left;
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 28px !important;
+        color: #000000 !important;
+        font-weight: 900 !important;
+    }
+    div[data-testid="stMetricLabel"] {
+        font-size: 12px !important;
+        color: #000000 !important;
         text-transform: uppercase;
-    }}
+        font-weight: 800 !important;
+        letter-spacing: 0.5px;
+    }
 
-    /* Filter Box Styling */
-    .filter-card {{
-        background-color: {current_theme["card_bg"]};
-        padding: 15px;
-        border-radius: 12px;
-        border: 1px solid {current_theme["card_border"]};
-        margin-bottom: 20px;
-    }}
-
-    /* Section Headings */
-    .section-head {{
-        font-size: 17px;
-        font-weight: 800;
-        color: {current_theme["text"]};
-        padding-bottom: 6px;
+    .section-head {
+        font-size: 18px;
+        font-weight: 900;
+        color: #000000;
         margin-bottom: 12px;
-        border-bottom: 2px solid {current_theme["primary"]};
-    }}
+        padding-bottom: 6px;
+        border-bottom: 3px solid #d32f2f;
+    }
 
-    /* Hide Streamlit Artifacts */
-    #MainMenu, header, footer, [data-testid="stHeader"] {{ visibility: hidden !important; display: none !important; }}
+    div[data-testid="stTable"], div[data-testid="stDataFrame"] {
+        color: #000000 !important;
+        font-weight: 700 !important;
+    }
+
+    div[data-testid="stFileUploader"] {
+        background-color: #ffffff;
+        border: 2px dashed #94a3b8;
+        border-radius: 8px;
+        padding: 10px;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 38px;
+        padding-top: 0px;
+        padding-bottom: 0px;
+        font-weight: 800 !important;
+    }
+
+    #MainMenu { visibility: hidden !important; display: none !important; }
+    header { visibility: hidden !important; display: none !important; }
+    footer { visibility: hidden !important; display: none !important; }
+    footer * { visibility: hidden !important; display: none !important; }
+    [data-testid="stHeader"] { visibility: hidden !important; display: none !important; }
+    [data-testid="stAppToolbar"] { display: none !important; }
+    [data-testid="stToolbar"] { display: none !important; }
+    [data-testid="stStatusWidget"] { display: none !important; }
+    .viewerBadge_container__1S-5D, .viewerBadge_link__1S-5D { display: none !important; }
+    #stDecoration { display: none !important; }
+    div[class*="viewerBadge"] { display: none !important; }
+    div[class*="styles_viewerBadge"] { display: none !important; }
+    [data-testid="manage-app-button"] { display: none !important; }
+    button[title="View fullscreen"] { display: none !important; }
+    a[href*="streamlit.io"] { display: none !important; }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
+with st.sidebar:
+    st.markdown("### 🔑 Account Actions")
+    if st.button("🔒 Lock Dashboard / Logout"):
+        st.session_state["password_correct"] = False
+        st.rerun()
+
 st.markdown(
     """
     <div class="hub-header">
-        <div class="hub-title">🚛 FLOOR OPS | AGING & PENDENCY ANALYTICS</div>
-        <div class="hub-subtitle">Kolkata Regional Hubs - High-Graphics Real-Time Performance Dashboard</div>
+        <div>
+            <div class="hub-title"><span>🚛</span> FLOOR OPS | AGING & PENDENCY ANALYTICS</div>
+            <div class="hub-subtitle">Kolkata Regional Hubs - Gate-In & Delivery Delay Tracking</div>
+        </div>
     </div>
 """,
     unsafe_allow_html=True,
 )
 
 
-# ==========================================
-# ⚡ CACHED DATA PROCESSING (SUPER FAST)
-# ==========================================
-@st.cache_data(show_spinner=False)
-def process_data(file_bytes):
-    df_raw = pd.read_excel(file_bytes)
-    df_raw.columns = df_raw.columns.str.strip().str.upper()
-
-    def find_col(keys):
-        for k in keys:
-            for c in df_raw.columns:
-                if k in c:
-                    return c
-        return None
-
-    col_cn = find_col(["CN_CN_NO", "CN_NO", "WAYBILL", "LR_NO"])
-    col_pkg = find_col(["CN_PKG", "PKG", "QTY"])
-    col_wt = find_col(["ACT_WT", "WT", "WEIGHT", "CN_ACTUAL_WEIGHT"])
-    col_todist = find_col(["TODIST", "DESTINATION", "HUB"])
-    col_gatein_date = find_col(["CHLN_GATE_IN_DATE", "GATE_IN_DATE"])
-    col_cn_date = find_col(["CN_DATE", "BOOKING_DATE"])
-    col_days = find_col(["CN_TOTAL_DAYS", "AGEING", "DAYS"])
-    col_reason = find_col(["UNDLVRD_REASON", "REASON", "REMARKS"])
-    col_mode = find_col(["MODE", "TRANSIT"])
-    col_cee = find_col(["CEE", "CONSIGNEE", "CLIENT"])
-    col_pin = find_col(["CEE_PINCODE", "PINCODE", "PIN"])
-
-    df = df_raw.drop_duplicates(subset=[col_cn]).copy() if col_cn else df_raw
-
-    today = pd.to_datetime(datetime.today().date())
-    p_date = (
-        pd.to_datetime(df[col_gatein_date], dayfirst=True, errors="coerce")
-        if col_gatein_date
-        else pd.Series(dtype="datetime64[ns]")
-    )
-    f_date = (
-        pd.to_datetime(df[col_cn_date], dayfirst=True, errors="coerce")
-        if col_cn_date
-        else pd.Series(dtype="datetime64[ns]")
-    )
-
-    df["DATE_OBJ"] = p_date.fillna(f_date)
-    df["GATE_IN_DAY"] = (
-        df["DATE_OBJ"].dt.strftime("%d-%b-%Y").fillna("Date Missing")
-    )
-
-    if col_days:
-        df["CALCULATED_DAYS"] = (
-            pd.to_numeric(df[col_days], errors="coerce")
-            .fillna((today - df["DATE_OBJ"]).dt.days.fillna(0))
-            .astype(int)
-        )
+def format_weight(kg_val):
+    if kg_val >= 1000:
+        return f"{kg_val / 1000:.2f} Ton"
     else:
-        df["CALCULATED_DAYS"] = (
-            (today - df["DATE_OBJ"])
-            .dt.days.fillna(0)
-            .apply(lambda x: max(0, int(x)))
-        )
-
-    df["CALCULATED_HOURS"] = df["CALCULATED_DAYS"] * 24
-
-    def assign_bucket(hrs):
-        if hrs >= 96:
-            return "96 Hour Above"
-        if hrs >= 72:
-            return "72 Hour Above"
-        if hrs >= 48:
-            return "48 Hour Above"
-        if hrs >= 24:
-            return "24 Hour Above"
-        return "24 Hour Below"
-
-    df["Aging_Bucket"] = df["CALCULATED_HOURS"].apply(assign_bucket)
-    df["CN_PKG_NUM"] = (
-        pd.to_numeric(df[col_pkg], errors="coerce").fillna(0).astype(int)
-        if col_pkg
-        else 0
-    )
-    df["CN_WT_NUM"] = (
-        pd.to_numeric(df[col_wt], errors="coerce").fillna(0).round(1)
-        if col_wt
-        else 0.0
-    )
-
-    if col_reason:
-        df["REASON_CLEAN"] = df[col_reason].apply(
-            lambda x: "Pending Reason"
-            if pd.isnull(x) or str(x).strip() in ["", "-", "NAN", "NONE"]
-            else str(x).strip()
-        )
-        df["REASON_STATUS"] = df["REASON_CLEAN"].apply(
-            lambda x: "Missing" if x == "Pending Reason" else "Filled"
-        )
-
-    cols = {
-        "cn": col_cn,
-        "pkg": col_pkg,
-        "wt": col_wt,
-        "todist": col_todist,
-        "gatein": col_gatein_date,
-        "cndate": col_cn_date,
-        "reason": col_reason,
-        "mode": col_mode,
-        "cee": col_cee,
-        "pin": col_pin,
-    }
-    return df, cols
+        return f"{kg_val:.1f} KG"
 
 
+if "processed_df" not in st.session_state:
+    st.session_state["processed_df"] = None
+
+# ==========================================
+# STEP 1: FILE UPLOADER
+# ==========================================
 uploaded_file = st.file_uploader(
     "Upload Operations Excel Sheet (.xlsx, .xls)", type=["xlsx", "xls"]
 )
 
 if uploaded_file is not None:
-    df_raw_loaded, cols = process_data(uploaded_file)
+    with st.spinner("Processing Operations Data & Removing Duplicates..."):
+        df_raw = pd.read_excel(uploaded_file)
+        df_raw.columns = df_raw.columns.str.strip().str.upper()
+
+        def find_column(possible_names, df):
+            for name in possible_names:
+                for col in df.columns:
+                    if name in col:
+                        return col
+            return None
+
+        col_cn = find_column(
+            ["CN_CN_NO", "CN_NO", "WAYBILL", "LR_NO", "CN"], df_raw
+        )
+        col_pkg = find_column(
+            ["CN_PKG", "PKG", "BOX", "QTY", "PIECES"], df_raw
+        )
+        col_wt = find_column(
+            ["ACT_WT", "CHG_WT", "WT", "WEIGHT", "TOTAL_WEIGHT", "KGS"], df_raw
+        )
+        col_todist = find_column(
+            ["TODIST", "DESTINATION", "LOCATION", "HUB"], df_raw
+        )
+        col_gatein_date = find_column(
+            ["CHLN_GATE_IN_DATE", "GATE_IN_DATE", "GATE_IN", "GATEIN"], df_raw
+        )
+        col_cn_date = find_column(["CN_DATE", "BOOKING_DATE"], df_raw)
+        col_days = find_column(
+            ["CN_TOTAL_DAYS", "AGEING", "DAYS", "PENDING_DAYS"], df_raw
+        )
+        col_reason = find_column(
+            ["UNDLVRD_REASON", "REASON", "REMARKS", "DELAY_REASON"], df_raw
+        )
+        col_mode = find_column(
+            ["MODE", "SERVICE", "PRIORITY", "TRANSIT"], df_raw
+        )
+        col_cee = find_column(
+            ["CEE", "CONSIGNEE", "CLIENT", "RECEIVER"], df_raw
+        )
+        col_pin = find_column(
+            ["CEE_PINCODE", "PINCODE", "PIN_CODE", "PIN", "DEST_PIN"], df_raw
+        )
+
+        df = df_raw.copy()
+
+        # Deduplicate based on CN
+        if col_cn:
+            df = df.drop_duplicates(subset=[col_cn]).copy()
+
+        today = pd.to_datetime(datetime.today().date())
+
+        # Gate-In Date / Fallback CN Date Logic
+        primary_date = (
+            pd.to_datetime(df[col_gatein_date], dayfirst=True, errors="coerce")
+            if col_gatein_date
+            else pd.Series(dtype="datetime64[ns]")
+        )
+        fallback_date = (
+            pd.to_datetime(df[col_cn_date], dayfirst=True, errors="coerce")
+            if col_cn_date
+            else pd.Series(dtype="datetime64[ns]")
+        )
+
+        df["DATE_OBJ"] = primary_date.fillna(fallback_date)
+        df["GATE_IN_DAY"] = (
+            df["DATE_OBJ"].dt.strftime("%d-%b-%Y").fillna("Date Missing")
+        )
+
+        if col_days:
+            df["CALCULATED_DAYS"] = (
+                pd.to_numeric(df[col_days], errors="coerce")
+                .fillna((today - df["DATE_OBJ"]).dt.days.fillna(0))
+                .astype(int)
+            )
+        else:
+            df["CALCULATED_DAYS"] = (
+                (today - df["DATE_OBJ"])
+                .dt.days.fillna(0)
+                .apply(lambda x: max(0, int(x)))
+            )
+
+        df["CALCULATED_HOURS"] = df["CALCULATED_DAYS"] * 24
+
+        def assign_hour_bucket(hrs):
+            if hrs >= 96:
+                return "96 Hour Above"
+            elif hrs >= 72:
+                return "72 Hour Above"
+            elif hrs >= 48:
+                return "48 Hour Above"
+            elif hrs >= 24:
+                return "24 Hour Above"
+            else:
+                return "24 Hour Below"
+
+        df["Aging_Bucket"] = df["CALCULATED_HOURS"].apply(assign_hour_bucket)
+
+        if col_pkg:
+            df["CN_PKG_NUM"] = (
+                pd.to_numeric(df[col_pkg], errors="coerce")
+                .fillna(0)
+                .astype(int)
+            )
+        else:
+            df["CN_PKG_NUM"] = 0
+
+        if col_wt:
+            df["CN_WT_NUM"] = (
+                pd.to_numeric(df[col_wt], errors="coerce").fillna(0).round(1)
+            )
+        else:
+            df["CN_WT_NUM"] = 0.0
+
+        if col_reason:
+            df["REASON_CLEAN"] = df[col_reason].apply(
+                lambda x: "Pending Reason"
+                if pd.isnull(x) or str(x).strip() in ["", "-", "NAN", "NONE"]
+                else str(x).strip()
+            )
+            df["REASON_STATUS"] = df["REASON_CLEAN"].apply(
+                lambda x: "Missing" if x == "Pending Reason" else "Filled"
+            )
+
+        st.session_state["processed_df"] = df
+        st.session_state["cols"] = {
+            "cn": col_cn,
+            "pkg": col_pkg,
+            "wt": col_wt,
+            "todist": col_todist,
+            "gatein": col_gatein_date,
+            "cndate": col_cn_date,
+            "reason": col_reason,
+            "mode": col_mode,
+            "cee": col_cee,
+            "pin": col_pin,
+        }
+
+if st.session_state["processed_df"] is not None:
+    df_raw_loaded = st.session_state["processed_df"]
+    cols = st.session_state["cols"]
+
     col_cn, col_pkg, col_wt, col_todist = (
         cols["cn"],
         cols["pkg"],
@@ -335,26 +358,27 @@ if uploaded_file is not None:
         cols["cndate"],
         cols["reason"],
     )
-    col_mode, col_cee = cols["mode"], cols["cee"]
+    col_mode, col_cee, col_pin = cols["mode"], cols["cee"], cols["pin"]
 
-    # Unique Option Lists
+    st.markdown("<br>", unsafe_allow_html=True)
+
     all_hubs = (
-        sorted(df_raw_loaded[col_todist].dropna().astype(str).unique().tolist())
+        sorted(df_raw_loaded[col_todist].dropna().unique().tolist())
         if col_todist
         else []
     )
-    all_dates = (
-        df_raw_loaded.dropna(subset=["DATE_OBJ"])
-        .sort_values(by="DATE_OBJ", ascending=False)["GATE_IN_DAY"]
-        .unique()
-        .tolist()
+    unique_dates_df = df_raw_loaded.dropna(subset=["DATE_OBJ"]).sort_values(
+        by="DATE_OBJ", ascending=False
     )
+    all_dates = unique_dates_df["GATE_IN_DAY"].unique().tolist()
+
     all_cees = (
         sorted(df_raw_loaded[col_cee].dropna().astype(str).unique().tolist())
         if col_cee
         else []
     )
-    all_reasons = (
+
+    all_specific_reasons = (
         sorted(
             df_raw_loaded[df_raw_loaded["REASON_STATUS"] == "Filled"][
                 "REASON_CLEAN"
@@ -366,117 +390,141 @@ if uploaded_file is not None:
         else []
     )
 
-    kpi_placeholder = st.empty()
+    kpi_container = st.container()
+    filter_container = st.container()
 
     # =========================================================
-    # 🔘 MASTER FILTERS WITH TICK-BOX (TOGGLE ALL)
+    # STEP 3: MASTER FILTERS (WITH CEE FILTER)
     # =========================================================
-    st.markdown("### 🔍 Filters & Selection Controls")
-    f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns(5)
+    with filter_container:
+        st.markdown("<br>", unsafe_allow_html=True)
+        f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns([1, 1, 1, 1, 1])
 
-    with f_col1:
-        chk_hub = st.checkbox("☑️ Select All Hubs", value=False)
-        selected_hubs = st.multiselect(
-            "🏢 TODIST Hub:",
-            options=all_hubs,
-            default=all_hubs if chk_hub else [],
-        )
+        with f_col1:
+            selected_hubs = st.multiselect(
+                "🏢 **TODIST Hub Filter:**",
+                options=all_hubs,
+                default=[],
+                help="Select TODIST hubs.",
+            )
 
-    with f_col2:
-        chk_date = st.checkbox("☑️ Select All Dates", value=True)
-        selected_dates = st.multiselect(
-            "🗓️ Gate-In Date:",
-            options=all_dates,
-            default=all_dates if chk_date else [],
-        )
+        with f_col2:
+            select_all_dates = st.checkbox(
+                "✅ **Select All Dates**", value=True
+            )
+            default_date_selection = all_dates if select_all_dates else []
 
-    with f_col3:
-        chk_cee = st.checkbox("☑️ Select All CEEs", value=False)
-        selected_cees = st.multiselect(
-            "👤 CEE / Consignee:",
-            options=all_cees,
-            default=all_cees if chk_cee else [],
-        )
+            selected_dates = st.multiselect(
+                "🗓️ **Select Dates:**",
+                options=all_dates,
+                default=default_date_selection,
+            )
 
-    with f_col4:
-        reason_status_filter = st.selectbox(
-            "⚡ Reason Status:",
-            ["All Status", "Pending Reason Only", "Updated Reason Only"],
-        )
+        with f_col3:
+            selected_cees = st.multiselect(
+                "👤 **CEE Filter:**",
+                options=all_cees,
+                default=[],
+                help="Select Consignee / CEE Name",
+            )
 
-    with f_col5:
-        chk_reason = st.checkbox("☑️ Select All Reasons", value=False)
-        selected_reasons = st.multiselect(
-            "⚠️ Specific Reason:",
-            options=all_reasons,
-            default=all_reasons if chk_reason else [],
-        )
+        with f_col4:
+            reason_filter = st.selectbox(
+                "⚡ **Reason Status Filter:**",
+                options=[
+                    "All Status",
+                    "Pending Reason Only",
+                    "Updated Reason Only",
+                ],
+                index=0,
+            )
 
-    # Filtering Data
+        with f_col5:
+            selected_specific_reasons = st.multiselect(
+                "⚠️ **Specific Reason Filter:**",
+                options=all_specific_reasons,
+                default=[],
+                help="Select specific updated delay reasons.",
+            )
+
+    # =========================================================
+    # ⚡ MASTER DYNAMIC FILTERING LOGIC
+    # =========================================================
     df_filtered = df_raw_loaded.copy()
 
     if selected_hubs:
         df_filtered = df_filtered[
-            df_filtered[col_todist].astype(str).isin(selected_hubs)
-        ]
+            df_filtered[col_todist].isin(selected_hubs)
+        ].copy()
+
     if selected_dates:
         df_filtered = df_filtered[
             df_filtered["GATE_IN_DAY"].isin(selected_dates)
-        ]
+        ].copy()
     else:
         df_filtered = df_filtered.iloc[0:0]
 
     if selected_cees and col_cee:
         df_filtered = df_filtered[
             df_filtered[col_cee].astype(str).isin(selected_cees)
-        ]
+        ].copy()
 
-    if reason_status_filter == "Pending Reason Only":
-        df_filtered = df_filtered[df_filtered["REASON_STATUS"] == "Missing"]
-    elif reason_status_filter == "Updated Reason Only":
-        df_filtered = df_filtered[df_filtered["REASON_STATUS"] == "Filled"]
-
-    if selected_reasons:
+    if reason_filter == "Pending Reason Only":
         df_filtered = df_filtered[
-            df_filtered["REASON_CLEAN"].isin(selected_reasons)
-        ]
+            df_filtered["REASON_STATUS"] == "Missing"
+        ].copy()
+    elif reason_filter == "Updated Reason Only":
+        df_filtered = df_filtered[
+            df_filtered["REASON_STATUS"] == "Filled"
+        ].copy()
+
+    if selected_specific_reasons:
+        df_filtered = df_filtered[
+            df_filtered["REASON_CLEAN"].isin(selected_specific_reasons)
+        ].copy()
 
     df = df_filtered.copy()
 
-    # Dynamic Weight Formatting
-    def format_weight(kg):
-        return f"{kg / 1000:.2f} Ton" if kg >= 1000 else f"{kg:.1f} KG"
+    # =========================================================
+    # STEP 2: TOP KPI CARDS
+    # =========================================================
+    total_cn = len(df)
+    total_pkg = df["CN_PKG_NUM"].sum() if total_cn > 0 else 0
+    total_wt = df["CN_WT_NUM"].sum() if total_cn > 0 else 0
+    avg_days = round(df["CALCULATED_DAYS"].mean(), 1) if total_cn > 0 else 0
 
-    # KPI Calculation
-    tot_cn = len(df)
-    tot_pkg = df["CN_PKG_NUM"].sum() if tot_cn > 0 else 0
-    tot_wt = df["CN_WT_NUM"].sum() if tot_cn > 0 else 0
-    avg_days = round(df["CALCULATED_DAYS"].mean(), 1) if tot_cn > 0 else 0
-    pending_reasons = (
+    pending_reason_count = (
         len(df[df["REASON_STATUS"] == "Missing"]) if col_reason else 0
     )
+    updated_reason_count = (
+        len(df[df["REASON_STATUS"] == "Filled"]) if col_reason else 0
+    )
 
-    with kpi_placeholder.container():
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
-        c1.metric("Unique CNs", f"{tot_cn:,}")
-        c2.metric("Total Packages", f"{tot_pkg:,}")
-        c3.metric("Weight Load", format_weight(tot_wt))
+    with kpi_container:
+        c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+        c1.metric("Total Unique CNs", f"{total_cn:,}")
+        c2.metric("Total PKG", f"{int(total_pkg):,}")
+        c3.metric(
+            "⚖️ Weight Load",
+            format_weight(total_wt) if col_wt else f"{int(total_pkg):,} Pkg",
+        )
         c4.metric(
-            "🚨 >96 Hours", f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}"
+            "🚨 >96 Hours",
+            f"{len(df[df['Aging_Bucket']=='96 Hour Above']):,}",
         )
         c5.metric("Avg Aging", f"{avg_days} Days")
-        c6.metric("Blank Reason CNs", f"{pending_reasons:,}")
+        c6.metric("Pending Reason", f"{pending_reason_count:,}")
+        c7.metric("Reason Updated", f"{updated_reason_count:,}")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # =========================================================
-    # HIGH-GRAPHICS VISUALIZATIONS (PLOTLY)
-    # =========================================================
-    g1, g2 = st.columns(2)
+    # SECTION 1: Aging Hours & Undelivered Reasons
+    r1_col1, r1_col2 = st.columns(2)
 
-    with g1:
+    with r1_col1:
         st.markdown(
-            "<div class='section-head'>📊 Aging Hours Breakdown</div>",
+            "<div class='section-head'>⏱️ Aging Hours Breakdown"
+            " (Gate-In)</div>",
             unsafe_allow_html=True,
         )
         bucket_order = [
@@ -486,81 +534,327 @@ if uploaded_file is not None:
             "24 Hour Above",
             "24 Hour Below",
         ]
-        b_df = (
+        bucket_df = (
             df["Aging_Bucket"]
             .value_counts()
             .reindex(bucket_order)
             .fillna(0)
             .reset_index()
         )
-        b_df.columns = ["Bucket", "Count"]
+        bucket_df.columns = ["Hour Bucket", "Shipment Count"]
 
-        fig_b = px.bar(
-            b_df,
-            x="Bucket",
-            y="Count",
-            text="Count",
-            color="Bucket",
+        fig_bucket = px.bar(
+            bucket_df,
+            x="Hour Bucket",
+            y="Shipment Count",
+            text="Shipment Count",
+            color="Hour Bucket",
             color_discrete_map={
-                "96 Hour Above": "#ef4444",
-                "72 Hour Above": "#f97316",
-                "48 Hour Above": "#eab308",
-                "24 Hour Above": "#3b82f6",
+                "96 Hour Above": "#b91c1c",
+                "72 Hour Above": "#ef4444",
+                "48 Hour Above": "#f97316",
+                "24 Hour Above": "#eab308",
                 "24 Hour Below": "#22c55e",
             },
-            template=current_theme["plotly_template"],
         )
-        fig_b.update_layout(
-            height=320,
-            margin=dict(l=10, r=10, t=10, b=10),
+        fig_bucket.update_layout(
             showlegend=False,
+            height=300,
+            margin=dict(l=0, r=0, t=10, b=0),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#000000", size=12, family="Inter"),
         )
-        st.plotly_chart(fig_b, use_container_width=True)
+        fig_bucket.update_traces(textfont_size=13, textfont_color="black")
+        st.plotly_chart(fig_bucket, use_container_width=True)
 
-    with g2:
+    with r1_col2:
         st.markdown(
-            "<div class='section-head'>⚠️ Top Delay Reasons</div>",
+            "<div class='section-head'>⚠️ Delay Reasons Breakdown</div>",
             unsafe_allow_html=True,
         )
         if col_reason:
-            r_df = (
+            reason_df = (
                 df[df["REASON_STATUS"] == "Filled"]["REASON_CLEAN"]
                 .value_counts()
-                .head(6)
+                .head(7)
                 .reset_index()
             )
-            r_df.columns = ["Reason", "Count"]
+            reason_df.columns = ["Reason", "Count"]
 
-            if len(r_df) > 0:
-                fig_r = px.bar(
-                    r_df,
+            if len(reason_df) > 0:
+                fig_reason = px.bar(
+                    reason_df,
                     x="Count",
                     y="Reason",
                     orientation="h",
                     text="Count",
                     color="Count",
                     color_continuous_scale="Reds",
-                    template=current_theme["plotly_template"],
                 )
-                fig_r.update_layout(
-                    height=320,
-                    margin=dict(l=10, r=10, t=10, b=10),
+                fig_reason.update_layout(
+                    showlegend=False,
+                    height=300,
+                    margin=dict(l=0, r=0, t=10, b=0),
                     yaxis={"categoryorder": "total ascending"},
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#000000", size=12, family="Inter"),
                 )
-                st.plotly_chart(fig_r, use_container_width=True)
+                fig_reason.update_traces(
+                    textfont_size=13, textfont_color="black"
+                )
+                st.plotly_chart(fig_reason, use_container_width=True)
             else:
-                st.info("No delay reasons updated for current filters.")
+                st.info(
+                    "No updated delay reasons found for current selection."
+                )
 
-    # Operations Data Table
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # SECTION 2: MISSING REASONS & TODIST DESTINATION LOAD
+    s2_col1, s2_col2 = st.columns(2)
+
+    with s2_col1:
+        st.markdown(
+            "<div class='section-head'>📅 Missing UNDLVRD_REASON Tracking</div>",
+            unsafe_allow_html=True,
+        )
+
+        if col_reason:
+            missing_df = df[df["REASON_STATUS"] == "Missing"].copy()
+
+            if len(missing_df) > 0:
+                tab_m1, tab_m2 = st.tabs(
+                    ["📅 Dates Breakdown", "🏢 TODIST Wise Details"]
+                )
+
+                with tab_m1:
+                    missing_summary = (
+                        missing_df.groupby(["DATE_OBJ", "GATE_IN_DAY"])
+                        .agg(
+                            Pending_CN_Count=(
+                                col_cn if col_cn else col_todist,
+                                "count",
+                            ),
+                            Pending_Packages=("CN_PKG_NUM", "sum"),
+                            Total_Weight=("CN_WT_NUM", "sum"),
+                        )
+                        .reset_index()
+                        .sort_values(by="DATE_OBJ", ascending=False)
+                    )
+
+                    missing_summary["Weight_Formatted"] = missing_summary[
+                        "Total_Weight"
+                    ].apply(format_weight)
+
+                    if col_wt:
+                        missing_summary_display = missing_summary[
+                            [
+                                "GATE_IN_DAY",
+                                "Pending_CN_Count",
+                                "Pending_Packages",
+                                "Weight_Formatted",
+                            ]
+                        ]
+                        missing_summary_display.columns = [
+                            "Gate In Date",
+                            "Blank Reason CNs",
+                            "Pending PKG",
+                            "Weight Load",
+                        ]
+                    else:
+                        missing_summary_display = missing_summary[
+                            [
+                                "GATE_IN_DAY",
+                                "Pending_CN_Count",
+                                "Pending_Packages",
+                            ]
+                        ]
+                        missing_summary_display.columns = [
+                            "Gate In Date",
+                            "Blank Reason CNs",
+                            "Pending PKG",
+                        ]
+
+                    st.dataframe(
+                        missing_summary_display,
+                        use_container_width=True,
+                        hide_index=True,
+                        height=250,
+                    )
+
+                with tab_m2:
+                    if col_todist:
+
+                        def join_cns(series):
+                            return ", ".join(series.astype(str).unique())
+
+                        todist_missing_summary = (
+                            missing_df.groupby(col_todist)
+                            .agg(
+                                Blank_Reason_CNs=(
+                                    col_cn if col_cn else col_todist,
+                                    "count",
+                                ),
+                                Pending_Packages=("CN_PKG_NUM", "sum"),
+                                Total_Weight=("CN_WT_NUM", "sum"),
+                                Pending_CN_List=(
+                                    col_cn if col_cn else col_todist,
+                                    join_cns,
+                                ),
+                            )
+                            .reset_index()
+                            .sort_values(
+                                by="Blank_Reason_CNs", ascending=False
+                            )
+                        )
+
+                        todist_missing_summary["Weight_Formatted"] = (
+                            todist_missing_summary["Total_Weight"].apply(
+                                format_weight
+                            )
+                        )
+
+                        if col_wt:
+                            display_td = todist_missing_summary[
+                                [
+                                    col_todist,
+                                    "Blank_Reason_CNs",
+                                    "Pending_Packages",
+                                    "Weight_Formatted",
+                                    "Pending_CN_List",
+                                ]
+                            ]
+                            display_td.columns = [
+                                "TODIST Hub",
+                                "Blank Reason CNs",
+                                "Pending PKG",
+                                "Weight Load",
+                                "Pending CN Numbers",
+                            ]
+                        else:
+                            display_td = todist_missing_summary[
+                                [
+                                    col_todist,
+                                    "Blank_Reason_CNs",
+                                    "Pending_Packages",
+                                    "Pending_CN_List",
+                                ]
+                            ]
+                            display_td.columns = [
+                                "TODIST Hub",
+                                "Blank Reason CNs",
+                                "Pending PKG",
+                                "Pending CN Numbers",
+                            ]
+
+                        st.dataframe(
+                            display_td,
+                            use_container_width=True,
+                            hide_index=True,
+                            height=250,
+                        )
+                    else:
+                        st.info("TODIST column missing in dataset.")
+            else:
+                st.success(
+                    "✅ UNDLVRD_REASON is filled for all selected Filtered"
+                    " shipments!"
+                )
+        else:
+            st.info("UNDLVRD_REASON column not found.")
+
+    with s2_col2:
+        st.markdown(
+            "<div class='section-head'>🎯 Total TODIST Load Summary</div>",
+            unsafe_allow_html=True,
+        )
+        if col_todist:
+            todist_summary = (
+                df.groupby(col_todist)
+                .agg(
+                    Pending_CN_Count=(col_cn if col_cn else col_todist, "count"),
+                    Pending_CN_PKG=("CN_PKG_NUM", "sum"),
+                    Total_Weight=("CN_WT_NUM", "sum"),
+                )
+                .reset_index()
+                .sort_values(by="Pending_CN_Count", ascending=False)
+            )
+
+            todist_summary["Weight_Formatted"] = todist_summary[
+                "Total_Weight"
+            ].apply(format_weight)
+
+            if col_wt:
+                display_load = todist_summary[
+                    [
+                        col_todist,
+                        "Pending_CN_Count",
+                        "Pending_CN_PKG",
+                        "Weight_Formatted",
+                    ]
+                ]
+                display_load.columns = [
+                    "TODIST Hub",
+                    "Pending CN Count",
+                    "Total Pending PKG",
+                    "Total Weight Load",
+                ]
+            else:
+                display_load = todist_summary[
+                    [col_todist, "Pending_CN_Count", "Pending_CN_PKG"]
+                ]
+                display_load.columns = [
+                    "TODIST Hub",
+                    "Pending CN Count",
+                    "Total Pending PKG",
+                ]
+
+            st.dataframe(
+                display_load,
+                use_container_width=True,
+                hide_index=True,
+                height=280,
+            )
+        else:
+            st.info("TODIST column not found in uploaded file.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Clean Filtered Operations Table
     st.markdown(
-        "<div class='section-head'>📋 Clean Operations Data</div>",
+        "<div class='section-head'>📋 Clean Unique Operations Dataset"
+        " (Filtered)</div>",
         unsafe_allow_html=True,
     )
-    disp_cols = [
-        c for c in [col_cn, col_todist, col_cee, col_pkg, col_wt, col_reason] if c
+    show_cols = [
+        c
+        for c in [
+            col_cn,
+            col_todist,
+            col_gatein_date,
+            col_cn_date,
+            col_mode,
+            col_cee,
+            col_pin,
+            col_pkg,
+            col_wt,
+            col_reason,
+        ]
+        if c
     ]
-    st.dataframe(
-        df[disp_cols + ["CALCULATED_DAYS", "Aging_Bucket"]],
-        use_container_width=True,
-        height=300,
+
+    display_df = df[show_cols + ["CALCULATED_DAYS", "Aging_Bucket"]].sort_values(
+        by="CALCULATED_DAYS", ascending=False
+    )
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    # Export CSV Button
+    csv_data = display_df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "📥 Download Filtered Unique Data (CSV)",
+        data=csv_data,
+        file_name="OmLogistics_Floor_Ops_Filtered.csv",
+        mime="text/csv",
     )
