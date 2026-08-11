@@ -9,7 +9,6 @@ st.set_page_config(page_title="Floor Ops Dashboard - Om Logistics", layout="wide
 # ==========================================
 # 🔒 SIMPLE PASSWORD AUTHENTICATION SYSTEM
 # ==========================================
-# Fixed Password
 DASHBOARD_PASSWORD = st.secrets.get("DASHBOARD_PASSWORD", "Dhiraj@01072026")
 
 
@@ -373,6 +372,12 @@ if st.session_state["processed_df"] is not None:
     )
     all_dates = unique_dates_df["GATE_IN_DAY"].unique().tolist()
 
+    all_cees = (
+        sorted(df_raw_loaded[col_cee].dropna().astype(str).unique().tolist())
+        if col_cee
+        else []
+    )
+
     all_specific_reasons = (
         sorted(
             df_raw_loaded[df_raw_loaded["REASON_STATUS"] == "Filled"][
@@ -389,11 +394,11 @@ if st.session_state["processed_df"] is not None:
     filter_container = st.container()
 
     # =========================================================
-    # STEP 3: MASTER FILTERS
+    # STEP 3: MASTER FILTERS (WITH CEE FILTER)
     # =========================================================
     with filter_container:
         st.markdown("<br>", unsafe_allow_html=True)
-        f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
+        f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns([1, 1, 1, 1, 1])
 
         with f_col1:
             selected_hubs = st.multiselect(
@@ -416,6 +421,14 @@ if st.session_state["processed_df"] is not None:
             )
 
         with f_col3:
+            selected_cees = st.multiselect(
+                "👤 **CEE Filter:**",
+                options=all_cees,
+                default=[],
+                help="Select Consignee / CEE Name",
+            )
+
+        with f_col4:
             reason_filter = st.selectbox(
                 "⚡ **Reason Status Filter:**",
                 options=[
@@ -426,7 +439,7 @@ if st.session_state["processed_df"] is not None:
                 index=0,
             )
 
-        with f_col4:
+        with f_col5:
             selected_specific_reasons = st.multiselect(
                 "⚠️ **Specific Reason Filter:**",
                 options=all_specific_reasons,
@@ -450,6 +463,11 @@ if st.session_state["processed_df"] is not None:
         ].copy()
     else:
         df_filtered = df_filtered.iloc[0:0]
+
+    if selected_cees and col_cee:
+        df_filtered = df_filtered[
+            df_filtered[col_cee].astype(str).isin(selected_cees)
+        ].copy()
 
     if reason_filter == "Pending Reason Only":
         df_filtered = df_filtered[
